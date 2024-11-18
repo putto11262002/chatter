@@ -1,0 +1,17 @@
+{{template "shared/layout" .}} {{define "title"}}New Chat{{end}} {{define
+"main"}}
+<main class="h-screen w-full flex justify-center items-center">
+  <div class="max-w-sm w-full p-4 shadow">
+    <form hx-get="/users" hx-target="#user" class="flex items-center gap-4">
+      <input
+        type="text"
+        name="username"
+        placeholder="Username"
+        class="outline-none border px-2 h-9 grow"
+      />
+      <button class="px-4 h-9 bg-black text-white flex-0">Search</button>
+    </form>
+    <div id="user" class="[&>*]:mt-4"></div>
+  </div>
+</main>
+{{end}}

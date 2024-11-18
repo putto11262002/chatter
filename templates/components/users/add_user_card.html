@@ -1,0 +1,10 @@
+<div class="px-3 py-3 border">
+  {{with . }}
+  <div class="flex justify-between gap-3">
+    <p class="font-medium">{{.Username}}</p>
+    <button class="h-7 bg-black px-3 text-sm text-white">Add</button>
+  </div>
+  {{else}}
+  <p class="text-sm text-gray-500">No user found</p>
+  {{end}}
+</div>
