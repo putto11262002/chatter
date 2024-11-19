@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"example.com/go-chat/internal/api"
-	"example.com/go-chat/pkg/chat"
-	"example.com/go-chat/pkg/user"
+	"github.com/putto11262002/chatter/internal/api"
+	"github.com/putto11262002/chatter/pkg/chat"
+	"github.com/putto11262002/chatter/pkg/user"
 )
 
 func sendCreatePrivateChatRequest(t *testing.T, client *http.Client, baseUrl string, payload api.CreatePrivateChatPayload) *http.Response {

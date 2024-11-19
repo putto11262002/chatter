@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/go-chat/internal/api"
-	"example.com/go-chat/pkg/auth"
-	"example.com/go-chat/pkg/server"
+	"github.com/putto11262002/chatter/internal/api"
+	"github.com/putto11262002/chatter/pkg/auth"
+	"github.com/putto11262002/chatter/pkg/server"
 	"github.com/go-chi/chi/v5"
 	"github.com/pressly/goose/v3"
 )

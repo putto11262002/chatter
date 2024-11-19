@@ -1,4 +1,4 @@
-module example.com/go-chat
+module github.com/putto11262002/chatter
 
 go 1.23.2
 

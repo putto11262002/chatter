@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"example.com/go-chat/pkg/user"
+	"github.com/putto11262002/chatter/pkg/user"
 )
 
 var (

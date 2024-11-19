@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"net/http"
 
-	"example.com/go-chat/pkg/auth"
-	"example.com/go-chat/pkg/chat"
-	"example.com/go-chat/pkg/user"
+	"github.com/putto11262002/chatter/pkg/auth"
+	"github.com/putto11262002/chatter/pkg/chat"
+	"github.com/putto11262002/chatter/pkg/user"
 	"github.com/go-chi/cors"
 )
 

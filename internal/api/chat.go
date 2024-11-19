@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"slices"
 
-	"example.com/go-chat/pkg/auth"
-	"example.com/go-chat/pkg/chat"
+	"github.com/putto11262002/chatter/pkg/auth"
+	"github.com/putto11262002/chatter/pkg/chat"
 )
 
 type ChatHandler struct {

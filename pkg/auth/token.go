@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"example.com/go-chat/pkg/user"
+	"github.com/putto11262002/chatter/pkg/user"
 	"github.com/golang-jwt/jwt/v5"
 )
 

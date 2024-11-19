@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"example.com/go-chat/internal/api"
-	"example.com/go-chat/pkg/auth"
-	"example.com/go-chat/pkg/user"
+	"github.com/putto11262002/chatter/internal/api"
+	"github.com/putto11262002/chatter/pkg/auth"
+	"github.com/putto11262002/chatter/pkg/user"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
 )

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/go-chat/pkg/logger"
+	"github.com/putto11262002/chatter/pkg/logger"
 	_ "github.com/mattn/go-sqlite3"
 )
 
