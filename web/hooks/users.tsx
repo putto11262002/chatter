@@ -32,7 +32,8 @@ export const useSignup = () =>
     "/api/users/signup",
     async (url, data: { arg: UserSignupRequest }) => {
       return api.post(url, data.arg);
-    }
+    },
+    {}
   );
 
 export const useSignin = () => {

@@ -30,6 +30,7 @@ CREATE TABLE messages (
 	sender TEXT NOT NULL,
 	data TEXT NOT NULL,
 	sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	status INTEGER NOT NULL DEFAULT 1 CHECK (status IN (1, 2)), -- messages in the database can only be sent (1) or read (2)
 	FOREIGN KEY (room_id) REFERENCES rooms(id),
 	FOREIGN KEY (sender) REFERENCES users(username)
 );

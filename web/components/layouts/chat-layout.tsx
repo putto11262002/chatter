@@ -4,6 +4,7 @@ import { Link, Outlet, useParams } from "react-router-dom";
 import Alert from "../alert";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Avatar from "../avatar";
 
 export default function ChatLayout() {
   const { data, isLoading, error } = useMyRooms();
@@ -31,11 +32,12 @@ export default function ChatLayout() {
                     <div
                       key={index}
                       className={cn(
-                        "py-2 px-3 border-b hover:bg-accent cursor-pointer",
+                        "py-2 px-3 border-b hover:bg-accent cursor-pointer flex gap-3",
                         roomID === room.roomID && "bg-accent"
                       )}
                     >
-                      <p className="font-medium">{room.roomName}</p>
+                      <Avatar name={room.roomName} />
+                      <p className="font-medium grow">{room.roomName}</p>
                     </div>
                   </Link>
                 ))}

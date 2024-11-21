@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/go-chi/cors"
 	"github.com/putto11262002/chatter/pkg/auth"
 	"github.com/putto11262002/chatter/pkg/chat"
 	"github.com/putto11262002/chatter/pkg/user"
-	"github.com/go-chi/cors"
 )
 
 type ApiConfig struct {
@@ -37,20 +37,47 @@ func (a *Api) Mux() http.Handler {
 	return a.mux
 }
 
+type HubStore struct {
+	chatStore chat.ChatStore
+}
+
+type AuthAdapter struct {
+}
+
+func (a *AuthAdapter) Authenticate(r *http.Request) (string, error) {
+	session, ok := auth.SessionFromContext(r.Context())
+	if !ok {
+		return "", auth.ErrUnauthenticated
+	}
+	return session.Username, nil
+}
+
 func (a *Api) mountHandlers() {
 	userStore := user.NewSQLiteUserStore(a.db)
 	auth := auth.NewSimpleAuth(userStore, a.db, a.config.TokenOptions)
-	chat := chat.NewSQLiteChatStore(a.db, userStore)
+	chatStore := chat.NewSQLiteChatStore(a.db, userStore)
 
 	userHandler := NewUserHandler(userStore, auth)
 
-	chatHandler := NewChatHandler(chat)
+	chatHandler := NewChatHandler(chatStore)
+
+	hub := chat.NewChatterHub(a.context, chatStore)
+	go hub.Start()
+	// defer hub.Close()
+
+	authAdapter := &AuthAdapter{}
+
+	clientFactory := chat.NewHubClientFactory(hub, authAdapter)
 
 	a.mux.Router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173"}, // TODO: change this to the actual frontend URL
 		AllowCredentials: true,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	}))
+
+	a.mux.With(JWTMiddleware(auth)).HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		clientFactory.HandleFunc(w, r)
+	})
 
 	a.mux.Route("/users", func(r *ApiMux) {
 		r.Post("/signup", userHandler.SignupHandler)

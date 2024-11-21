@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
-	"github.com/putto11262002/chatter/pkg/user"
 	"github.com/google/uuid"
+	"github.com/putto11262002/chatter/pkg/user"
 )
 
 const (
@@ -44,18 +45,30 @@ type Room struct {
 	Type  ChatType
 }
 
+type MessageStatus = uint8
+
+const (
+	Pending MessageStatus = iota
+	Sent
+	Read
+	Fail
+)
+
 type Message struct {
-	ID     string
-	Type   MessageType
-	Data   string
-	RoomID string
-	Sender string
-	SentAt string
+	ID     string        `json:"id"`
+	Type   MessageType   `json:"type"`
+	Data   string        `json:"data"`
+	RoomID string        `json:"roomID"`
+	Sender string        `json:"sender"`
+	SentAt time.Time     `json:"sentAt"`
+	Status MessageStatus `json:"status"`
 }
 
 type MessageCreateInput struct {
-	Type MessageType
-	Data string
+	Type   MessageType `json:"type"`
+	Data   string      `json:"data"`
+	Sender string      `json:"sender"`
+	RoomID string      `json:"roomID"`
 }
 
 type ChatStore interface {
@@ -67,9 +80,11 @@ type ChatStore interface {
 
 	GetUserRooms(ctx context.Context, username string) ([]RoomUser, error)
 
-	SendMessageToRoom(ctx context.Context, message Message) (string, error)
+	SendMessageToRoom(ctx context.Context, message MessageCreateInput) (*Message, error)
 
 	GetRoomMessages(ctx context.Context, roomID, user string) ([]Message, error)
+
+	ReadRoomMessages(ctx context.Context, roomID, user string) error
 }
 
 type SQLiteChatStore struct {
@@ -265,27 +280,40 @@ func (s *SQLiteChatStore) userInRoom(ctx context.Context, roomID, sender string)
 	return count > 0, nil
 }
 
-func (s *SQLiteChatStore) SendMessageToRoom(ctx context.Context, message Message) (string, error) {
+func (s *SQLiteChatStore) SendMessageToRoom(ctx context.Context, message MessageCreateInput) (*Message, error) {
 	ok, err := s.userInRoom(ctx, message.RoomID, message.Sender)
 	if err != nil {
-		return "", fmt.Errorf("userInRoom: %w", err)
+		return nil, fmt.Errorf("userInRoom: %w", err)
 	}
 
 	if !ok {
-		return "", ErrChatNotFound
+		return nil, ErrChatNotFound
 	}
 
 	id := uuid.New().String()
+	sentAt := time.Now().UTC()
 
 	if message.Type != TextMessage {
-		return "", ErrInvalidMessage
+		return nil, ErrInvalidMessage
 	}
 
-	s.db.ExecContext(ctx, `INSERT INTO messages (id, type, room_id, sender, data) VALUES (@id, @type, @room_id, @sender, @data)`,
+	_, err = s.db.ExecContext(ctx, `INSERT INTO messages (id, type, room_id, sender, data, sent_at, status) 
+	VALUES (@id, @type, @room_id, @sender, @data, @sent_at, @status)`,
 		sql.Named("id", id), sql.Named("type", message.Type),
-		sql.Named("room_id", message.RoomID), sql.Named("sender", message.Sender), sql.Named("data", message.Data))
+		sql.Named("room_id", message.RoomID), sql.Named("sender", message.Sender),
+		sql.Named("data", message.Data), sql.Named("sent_at", sentAt), sql.Named("status", Sent))
 
-	return id, nil
+	createdMessage := &Message{
+		ID:     id,
+		Type:   message.Type,
+		Data:   message.Data,
+		RoomID: message.RoomID,
+		Sender: message.Sender,
+		SentAt: sentAt,
+		Status: Sent,
+	}
+
+	return createdMessage, nil
 }
 
 func (s *SQLiteChatStore) GetRoomMessages(ctx context.Context, roomID, user string) ([]Message, error) {
@@ -299,7 +327,7 @@ func (s *SQLiteChatStore) GetRoomMessages(ctx context.Context, roomID, user stri
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-	SELECT m.id, m.type, m.data, m.room_id, m.sender, m.sent_at
+	SELECT m.id, m.type, m.data, m.room_id, m.sender, m.sent_at, m.status
 	FROM messages AS m
 	WHERE m.room_id = @room_id
 	ORDER BY m.sent_at DESC
@@ -313,7 +341,7 @@ func (s *SQLiteChatStore) GetRoomMessages(ctx context.Context, roomID, user stri
 
 	for rows.Next() {
 		var message Message
-		if err := rows.Scan(&message.ID, &message.Type, &message.Data, &message.RoomID, &message.Sender, &message.SentAt); err != nil {
+		if err := rows.Scan(&message.ID, &message.Type, &message.Data, &message.RoomID, &message.Sender, &message.SentAt, &message.Status); err != nil {
 			break
 		}
 		messages = append(messages, message)
@@ -327,6 +355,26 @@ func (s *SQLiteChatStore) GetRoomMessages(ctx context.Context, roomID, user stri
 	}
 
 	return messages, nil
+}
+
+func (s *SQLiteChatStore) ReadRoomMessages(ctx context.Context, roomID, user string) error {
+	ok, err := s.userInRoom(ctx, roomID, user)
+	if err != nil {
+		return fmt.Errorf("userInRoom: %w", err)
+	}
+
+	if !ok {
+		return ErrChatNotFound
+	}
+
+	_, err = s.db.ExecContext(ctx, `UPDATE messages SET status = @status WHERE room_id = @room_id AND sender != @sender`,
+		sql.Named("status", Read), sql.Named("room_id", roomID), sql.Named("sender", user))
+
+	if err != nil {
+		return fmt.Errorf("updating messages: %w", err)
+	}
+
+	return nil
 }
 
 func (s *SQLiteChatStore) CreateGroupChat(ctx context.Context, name string, users ...string) (string, error) {

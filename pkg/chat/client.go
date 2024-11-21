@@ -1,4 +1,4 @@
-package ws
+package chat
 
 import (
 	"fmt"
@@ -24,12 +24,20 @@ const (
 	maxMessageSize = 512
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 type HubClient struct {
 	id   string
 	hub  Hub
 	conn *websocket.Conn
 	mu   sync.RWMutex
-	send chan Message
+	send chan *Packet
 }
 
 func (c *HubClient) ID() string {
@@ -39,7 +47,7 @@ func (c *HubClient) ID() string {
 	return c.id
 }
 
-func (c *HubClient) Send(msg Message) {
+func (c *HubClient) Send(msg *Packet) {
 	if c == nil {
 		return
 	}
@@ -62,12 +70,15 @@ func (c *HubClient) readPump() {
 	}()
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
-	fmt.Printf("readPump: %v\n", c.id)
 	for {
-		var message JsonMessage
-		err := c.conn.ReadJSON(&message)
+		var packet Packet
+		err := c.conn.ReadJSON(&packet)
+		packet.From = c.id
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 				return
@@ -83,9 +94,7 @@ func (c *HubClient) readPump() {
 			return
 		}
 
-		fmt.Println("message: ", message)
-
-		c.hub.Broadcast(message.Message(c.id))
+		c.hub.Broadcast(&packet)
 
 	}
 
@@ -100,6 +109,7 @@ func (c *HubClient) writePump() (err error) {
 	defer func() {
 		ticker.Stop()
 		if err != nil {
+			fmt.Printf("writePump close connection because: %v\n", err)
 			c.hub.Unregister(c)
 			c.conn.Close()
 		}
@@ -125,9 +135,11 @@ func (c *HubClient) writePump() (err error) {
 
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			fmt.Printf("sending ping to %v\n", c.id)
 			err = c.conn.WriteMessage(websocket.PingMessage, nil)
 			if err != nil {
 				return err
+
 			}
 		}
 	}
@@ -165,7 +177,7 @@ func (f *HubClientFactory) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	client := &HubClient{
 		hub:  f.hub,
 		conn: conn,
-		send: make(chan Message, SendChannelSize),
+		send: make(chan *Packet, 10),
 		id:   id,
 	}
 

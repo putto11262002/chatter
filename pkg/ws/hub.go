@@ -2,103 +2,60 @@ package ws
 
 import (
 	"context"
-	"log"
 )
 
 const (
 	ChatMessage MessageType = iota
 )
 
+// MessageType is the type of the message.
+// 0-50 is reserved for system messages.
+// 50-100 can be used to defined user-level messages.
 type MessageType uint8
 
 type StoreAapter interface {
 	GetRoomMembers(string) ([]string, error)
-	NewMessage(Message) error
+	PersistMessage(Message) error
 }
 
-type Hub struct {
-	Register   chan *WSClient
-	Unregister chan *WSClient
-	Incoming   chan Message
-	// id to client
-	clients map[string]*WSClient
-	ctx     context.Context
-	store   StoreAapter
+type HubStore interface {
+	GetRoomMembers(context.Context, string) ([]string, error)
+	PersistMessage(context.Context, Message) error
+}
+
+type Client interface {
+	ID() string
+	Send(Message)
+	Close() error
+}
+
+type Hub interface {
+	Register(client Client)
+	Unregister(client Client)
+	Broadcast(message Message)
+	Close() error
+	Start()
+}
+
+type HubMessageType = uint8
+
+const (
+	ChatMessageType HubMessageType = iota
+	EventMessageType
+	ErrorMessageType
+)
+
+type HubMessage struct {
+	Type HubMessageType
+	From string
+	Data []byte
 }
 
 type Message struct {
 	Type MessageType
 	Data string
+	// To is the room id the message is sent to.
+	// If it is empty, the message is broadcast to all clients apart from the sender.
 	To   string
 	From string
-}
-
-func NewHub(ctx context.Context, store StoreAapter) *Hub {
-	return &Hub{
-		Register:   make(chan *WSClient),
-		Unregister: make(chan *WSClient),
-		Incoming:   make(chan Message),
-		clients:    make(map[string]*WSClient),
-		ctx:        ctx,
-		store:      store,
-	}
-}
-
-func (hub *Hub) Start() {
-	for {
-		select {
-
-		case client := <-hub.Register:
-			hub.clients[client.id] = client
-			log.Printf("Client %s connected", client.id)
-
-			// Broadcast client connected
-		case client := <-hub.Unregister:
-			delete(hub.clients, client.id)
-			// TODO: do i need to call client.Close() here	?
-
-			log.Printf("Client %s disconnected", client.id)
-
-		case message := <-hub.Incoming:
-
-			targetClients, err := hub.store.GetRoomMembers(message.To)
-			// for now just drop the message
-			if err != nil {
-				log.Printf("store.GetRoomMembers: %v", err)
-				continue
-			}
-
-			// save the message to the database to guarantee delivery
-			err = hub.store.NewMessage(message)
-			// for now just drop the message
-			if err != nil {
-				log.Printf("store.NewMessage: %v", err)
-				continue
-			}
-
-			for _, c := range targetClients {
-				if c == message.From {
-					continue
-				}
-
-				target, ok := hub.clients[c]
-				if ok {
-					target.send <- message
-				}
-
-			}
-
-			// client is not connected, save message to database
-
-		case <-hub.ctx.Done():
-			for _, client := range hub.clients {
-				client.Close()
-			}
-
-			// some additional cleanup
-
-			return
-
-		}
-	}
 }

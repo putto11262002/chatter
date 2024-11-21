@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/putto11262002/chatter/pkg/auth"
 	"github.com/putto11262002/chatter/pkg/chat"
@@ -68,18 +69,24 @@ type CreateMessageResponse struct {
 }
 
 type MessageResponse struct {
-	Type   chat.MessageType `json:"type"`
-	Data   string           `json:"data"`
-	RoomID string           `json:"roomID"`
-	Sender string           `json:"sender"`
+	ID     string             `json:"id"`
+	Type   chat.MessageType   `json:"type"`
+	Data   string             `json:"data"`
+	RoomID string             `json:"roomID"`
+	Sender string             `json:"sender"`
+	SentAt time.Time          `json:"sentAt"`
+	Status chat.MessageStatus `json:"status"`
 }
 
 func NewMessageResponse(message chat.Message) MessageResponse {
 	return MessageResponse{
+		ID:     message.ID,
 		Type:   message.Type,
 		Data:   message.Data,
 		RoomID: message.RoomID,
 		Sender: message.Sender,
+		SentAt: message.SentAt,
+		Status: message.Status,
 	}
 }
 
@@ -190,14 +197,14 @@ func (h *ChatHandler) SendMessageToRoomHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	session := sessionFromRequest(r)
-	createInput := chat.Message{
+	createInput := chat.MessageCreateInput{
 		Data:   message.Data,
 		Type:   message.Type,
 		RoomID: roomID,
 		Sender: session.Username,
 	}
 
-	id, err := h.chatStore.SendMessageToRoom(r.Context(), createInput)
+	created, err := h.chatStore.SendMessageToRoom(r.Context(), createInput)
 	if err != nil {
 		switch err {
 		case chat.ErrChatNotFound:
@@ -209,7 +216,7 @@ func (h *ChatHandler) SendMessageToRoomHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	WriteJsonResponseWithStatusCode(w, CreateMessageResponse{ID: id}, http.StatusCreated)
+	WriteJsonResponseWithStatusCode(w, CreateMessageResponse{ID: created.ID}, http.StatusCreated)
 	return nil
 }
 

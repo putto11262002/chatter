@@ -21,7 +21,7 @@ const SessionProvider = () => {
     // }
   }, [data, isLoading, error]);
 
-  if (!data) {
+  if (!data || isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center">
         Chatter...
