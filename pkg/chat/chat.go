@@ -135,8 +135,8 @@ func (s *SQLiteChatStore) CreatePrivateChat(ctx context.Context, users [2]string
 
 	// Continue with the rest of the logic
 	row := s.db.QueryRowContext(ctx, `SELECT count(*) FROM room_users AS ru1 
-		INNER JOIN room_users AS ru2 ON ru1.room_id = ru2.room_id 
-		WHERE ru1.username = @username1 AND ru2.username = @username2`, sql.Named("username1", users[0]), sql.Named("username2", users[1]))
+		INNER JOIN room_users AS ru2 ON ru1.room_id = ru2.room_id INNER JOIN rooms AS r ON ru1.room_id = r.id
+		WHERE ru1.username = @username1 AND ru2.username = @username2 AND r.type = @type`, sql.Named("username1", users[0]), sql.Named("username2", users[1]), sql.Named("type", PrivateChat))
 
 	var count int
 
