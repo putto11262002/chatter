@@ -21,14 +21,20 @@ type CreatePrivateChatPayload struct {
 	Other string `json:"other"`
 }
 
+type CreateGroupChatPayload struct {
+	Users []string `json:"users"`
+	Name  string   `json:"name"`
+}
+
 type CreateChatResponse struct {
 	ID string `json:"id"`
 }
 
 type UserRoomResponse struct {
-	Username string `json:"username"`
-	RoomID   string `json:"roomID"`
-	RoomName string `json:"roomName"`
+	Username        string `json:"username"`
+	RoomID          string `json:"roomID"`
+	RoomName        string `json:"roomName"`
+	LastMessageRead int    `json:"lastMessageRead"`
 }
 
 type RoomResponse struct {
@@ -41,9 +47,10 @@ func NewRoomResponse(room chat.Room) RoomResponse {
 	var users []UserRoomResponse
 	for _, user := range room.Users {
 		users = append(users, UserRoomResponse{
-			Username: user.Username,
-			RoomID:   user.RoomID,
-			RoomName: user.RoomName,
+			Username:        user.Username,
+			RoomID:          user.RoomID,
+			RoomName:        user.RoomName,
+			LastMessageRead: user.LastMessageRead,
 		})
 	}
 	return RoomResponse{
@@ -65,17 +72,16 @@ type MessageCreateRequest struct {
 }
 
 type CreateMessageResponse struct {
-	ID string `json:"id"`
+	ID int `json:"id"`
 }
 
 type MessageResponse struct {
-	ID     string             `json:"id"`
-	Type   chat.MessageType   `json:"type"`
-	Data   string             `json:"data"`
-	RoomID string             `json:"roomID"`
-	Sender string             `json:"sender"`
-	SentAt time.Time          `json:"sentAt"`
-	Status chat.MessageStatus `json:"status"`
+	ID     int              `json:"id"`
+	Type   chat.MessageType `json:"type"`
+	Data   string           `json:"data"`
+	RoomID string           `json:"roomID"`
+	Sender string           `json:"sender"`
+	SentAt time.Time        `json:"sentAt"`
 }
 
 func NewMessageResponse(message chat.Message) MessageResponse {
@@ -86,7 +92,6 @@ func NewMessageResponse(message chat.Message) MessageResponse {
 		RoomID: message.RoomID,
 		Sender: message.Sender,
 		SentAt: message.SentAt,
-		Status: message.Status,
 	}
 }
 
@@ -112,6 +117,28 @@ func NewUserRoomsResponse(users []chat.RoomUser) []UserRoomsResponse {
 		response = append(response, NewUserRoomResponse(user))
 	}
 	return response
+}
+
+func (h *ChatHandler) CreateGroupChatHandler(w http.ResponseWriter, r *http.Request) error {
+	var payload CreateGroupChatPayload
+	if err := DecodeJson(r.Body, &payload); err != nil {
+		return err
+	}
+
+	session := sessionFromRequest(r)
+
+	payload.Users = append(payload.Users, session.Username)
+
+	id, err := h.chatStore.CreateGroupChat(r.Context(), payload.Name, payload.Users...)
+	if err != nil {
+		if err == chat.ErrInvalidUser {
+			return NewApiError(err.Error(), http.StatusBadRequest)
+		}
+		return err
+	}
+
+	WriteJsonResponseWithStatusCode(w, CreateChatResponse{ID: id}, http.StatusCreated)
+	return nil
 }
 
 func (h *ChatHandler) CreatePrivateChatHandler(w http.ResponseWriter, r *http.Request) error {
@@ -177,12 +204,16 @@ func (h *ChatHandler) GetMyUserRoomsHandler(w http.ResponseWriter, r *http.Reque
 func (h *ChatHandler) GetUserRoomsByUserIDHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("userID")
 
-	roomUsers, err := h.chatStore.GetUserRooms(r.Context(), id)
+	roomUsers, err := h.chatStore.GetRoomViews(r.Context(), id)
 	if err != nil {
 		return err
 	}
 
-	WriteJsonResponse(w, NewUserRoomsResponse(roomUsers))
+	if roomUsers == nil {
+		WriteJsonResponse(w, []chat.RoomView{})
+	} else {
+		WriteJsonResponse(w, roomUsers)
+	}
 	return nil
 }
 
@@ -236,6 +267,11 @@ func (h *ChatHandler) GetRoomMessagesHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	WriteJsonResponse(w, NewMessagesResponse(message))
+	if message == nil {
+		WriteJsonResponse(w, []MessageResponse{})
+	} else {
+		WriteJsonResponse(w, message)
+	}
+
 	return nil
 }

@@ -5,7 +5,7 @@ import { Send } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
 import { useWS } from "@/hooks/ws-provider";
-import { useEffect, useRef, useState } from "react";
+import {  useRef, useState } from "react";
 
 export default function ChatMessageInput({ roomID }: { roomID: string }) {
   const { sendMessage, emitTypingEvent } = useWS();
@@ -29,7 +29,7 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
   };
 
   const onSumit = (data: string) => {
-    sendMessage({ data, roomID, type: MessageType.TEXT });
+    sendMessage(roomID, MessageType.TEXT, data);
     form.reset();
   };
 

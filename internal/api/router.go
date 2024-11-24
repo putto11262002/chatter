@@ -72,6 +72,13 @@ func (a *ApiMux) Route(path string, f func(r *ApiMux)) {
 
 }
 
+func (a *ApiMux) Group(f func(r *ApiMux)) *ApiMux {
+	ch := a.Router.Group(func(r chi.Router) {
+		f(&ApiMux{Router: r})
+	})
+	return &ApiMux{Router: ch}
+}
+
 func (a *ApiMux) Use(middleware ApiMiddleware) {
 	a.Router.Use(func(h http.Handler) http.Handler {
 		return middleware(h)

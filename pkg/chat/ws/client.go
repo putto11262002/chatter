@@ -1,4 +1,4 @@
-package chat
+package ws
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/putto11262002/chatter/pkg/chat/proto"
 )
 
 const (
@@ -37,7 +38,7 @@ type HubClient struct {
 	hub  Hub
 	conn *websocket.Conn
 	mu   sync.RWMutex
-	send chan *Packet
+	send chan *proto.Packet
 }
 
 func (c *HubClient) ID() string {
@@ -47,7 +48,7 @@ func (c *HubClient) ID() string {
 	return c.id
 }
 
-func (c *HubClient) Send(msg *Packet) {
+func (c *HubClient) Send(msg *proto.Packet) {
 	if c == nil {
 		return
 	}
@@ -76,7 +77,7 @@ func (c *HubClient) readPump() {
 	})
 
 	for {
-		var packet Packet
+		var packet proto.Packet
 		err := c.conn.ReadJSON(&packet)
 		packet.From = c.id
 		if err != nil {
@@ -89,7 +90,7 @@ func (c *HubClient) readPump() {
 				return
 			}
 
-			log.Printf("reading message: %v", err)
+			log.Printf("conn.ReadJsono: %v", err)
 
 			return
 		}
@@ -177,7 +178,7 @@ func (f *HubClientFactory) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	client := &HubClient{
 		hub:  f.hub,
 		conn: conn,
-		send: make(chan *Packet, 10),
+		send: make(chan *proto.Packet, 1),
 		id:   id,
 	}
 

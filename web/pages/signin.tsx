@@ -13,7 +13,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Alert from "@/components/alert";
 import { Link, useNavigate } from "react-router-dom";
-import { useSignin } from "@/hooks/users";
+import { useMe, useSignin } from "@/hooks/users";
+import { useEffect } from "react";
 
 export default function Signin() {
   const form = useForm<UserSigninRequest>({
@@ -23,6 +24,14 @@ export default function Signin() {
   const navigate = useNavigate();
 
   const { isMutating, trigger, error } = useSignin();
+
+  const { data, isLoading } = useMe();
+
+  useEffect(() => {
+    if (data && !isLoading) {
+      navigate("/");
+    }
+  }, [data, isLoading]);
 
   return (
     <main className="h-screen w-full flex items-center justify-center">
