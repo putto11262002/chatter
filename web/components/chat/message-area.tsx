@@ -1,13 +1,12 @@
-import { useChatMessageHistory } from "@/hooks/chats";
+import { useChatMessageHistory, useRoom } from "@/hooks/chats";
 import { useSession } from "../providers/session-provider";
 import Alert from "../alert";
 import { Loader2, MoreHorizontal } from "lucide-react";
 import Message from "./message";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "../ui/scroll-area";
-import { MessageStatusLabels } from "@/types/chat";
-import { useTyping } from "@/hooks/ws-provider";
+import { useTyping, useWS } from "@/hooks/ws-provider";
 import { differenceInDays, format } from "date-fns";
 import Avatar from "../avatar";
 
@@ -16,8 +15,32 @@ export default function MessageArea({ roomID }: { roomID: string }) {
   const { data, isLoading, error } = useChatMessageHistory(roomID);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messages = data?.slice().reverse();
-
+  const { online } = useWS();
+  const { data: room, isLoading: isLoadingRoom } = useRoom(roomID);
+  const { readMessage } = useWS();
   const users = useTyping(roomID);
+  const [tabActive, setTabActive] = useState(false);
+
+  useEffect(() => {
+    window.addEventListener("focus", () => {
+      setTabActive(true);
+    });
+    window.addEventListener("blur", () => {
+      setTabActive(false);
+    });
+
+    return () => {
+      window.removeEventListener("focus", () => {});
+      window.removeEventListener("blur", () => {});
+      setTabActive(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (data && !isLoading && data.length > 0) {
+      readMessage(roomID, data[0].id);
+    }
+  }, [roomID, data, isLoading]);
 
   useEffect(() => {
     if (!scrollAreaRef.current) return;
@@ -41,7 +64,7 @@ export default function MessageArea({ roomID }: { roomID: string }) {
     );
   }
 
-  if (isLoading || !messages) {
+  if (isLoading || !messages || isLoadingRoom || !room) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-4 h-4 animate-spin" />
@@ -59,6 +82,14 @@ export default function MessageArea({ roomID }: { roomID: string }) {
 
           const prev = index - 1 >= 0 ? messages[index - 1] : null;
 
+          const nextRead = next && next.interactions.length > 0;
+
+          const read = message.interactions.length > 0;
+
+          const readUpToHere = room?.users
+            .filter((u) => u.lastMessageRead === message.id)
+            .map((u) => u.username);
+
           return (
             <div key={index} className="flex flex-col">
               {prev &&
@@ -68,10 +99,16 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                   </p>
                 )}
               <div className="flex gap-2">
-                {!myMessage && <Avatar name={message.sender} />}
+                {!myMessage && (
+                  <Avatar
+                    online={online[message.sender]}
+                    size="sm"
+                    name={message.sender}
+                  />
+                )}
                 <div
                   className={cn(
-                    "flex flex-col grow",
+                    "flex flex-col grow gap-1",
                     myMessage ? "items-end" : "items-start"
                   )}
                 >
@@ -81,16 +118,23 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                       className={myMessage ? "bg-gray-200" : ""}
                     />
                   </div>
-
-                  {message.sender === session.username &&
-                    (index === messages.length - 1 ||
-                      (next && next.status != message.status)) && (
-                      <p className="text-xs text-muted-foreground">
-                        {MessageStatusLabels[message.status]}
-                      </p>
-                    )}
                 </div>
               </div>
+              {readUpToHere && readUpToHere.length > 0 && (
+                <div className="flex items-center gap-3 mt-2 pb-2">
+                  <div className="flex items-center gap-1">
+                    {readUpToHere.map((username, index) => (
+                      <Avatar
+                        key={index}
+                        name={username}
+                        size="xs"
+                        online={online[username]}
+                      />
+                    ))}
+                  </div>
+                  <div className="grow border-b border-dashed"></div>
+                </div>
+              )}
             </div>
           );
         })}

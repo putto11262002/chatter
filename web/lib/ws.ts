@@ -1,5 +1,4 @@
-import { Message } from "@/types/chat";
-import { z } from "zod";
+import { decodePacket, Packet } from "./ws/proto";
 
 type WSOptions = {
   onReadStateChange: (readyState: ReadyState) => void;
@@ -37,23 +36,9 @@ export class WS {
     });
 
     this.conn.addEventListener("message", (message) => {
-      const messageValidation = PacketSchema.safeParse(
-        JSON.parse(message.data)
-      );
-      if (messageValidation.success) {
-        const packet = messageValidation.data;
-        packet.data = base64Decode(packet.data);
+      const packet = decodePacket(message.data);
 
-        this.onPacketReceived(packet);
-        return;
-      }
-      console.log(
-        "invalid packet received",
-        "\ndata:",
-        message.data,
-        "\nerror:",
-        messageValidation.error.format()
-      );
+      this.onPacketReceived(packet);
     });
 
     this.conn.addEventListener("close", (ev) => {
@@ -80,52 +65,4 @@ export class WS {
   public close() {
     this.conn.close();
   }
-}
-
-export enum PacketType {
-  ChatMessage = 1,
-  RoomEvent = 2,
-  Error = 3,
-  ChatMessageStatusUpdate = 4,
-  ReadRoomMessages = 5,
-  TypingEvent = 6,
-}
-
-export type Packet = {
-  type: PacketType;
-  // base64 encoded string
-  data: string;
-  correlationID: number;
-};
-
-export const PacketSchema = z.object({
-  type: z.nativeEnum(PacketType),
-  data: z.string(),
-  correlationID: z.number(),
-});
-
-export function createPacket(type: PacketType, data: string): Packet {
-  return {
-    correlationID: generateCorrelationID(),
-    type,
-    data: base64Encode(data),
-  };
-}
-
-export function createChatMessagePacket(
-  message: Pick<Message, "data" | "type" | "roomID">
-): Packet {
-  return createPacket(PacketType.ChatMessage, JSON.stringify(message));
-}
-
-function base64Decode(str: string): string {
-  return atob(str);
-}
-
-function base64Encode(str: string): string {
-  return btoa(str);
-}
-
-function generateCorrelationID(): number {
-  return Math.floor(Math.random() * 65536);
 }

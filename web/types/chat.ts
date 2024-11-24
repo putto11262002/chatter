@@ -1,22 +1,34 @@
 import { z } from "zod";
 
+export type RoomView = {
+  roomID: string;
+  roomName: string;
+  users: string[];
+};
+
 export type Room = {
-  id: string;
+  ID: string;
+  Type: string;
   users: RoomUser[];
-  type: string;
 };
 
 export type RoomUser = {
   username: string;
   roomID: string;
   roomName: string;
+  lastMessageRead: number;
 };
 
 export type CreatePrivateChatRequest = {
   other: string;
 };
 
-export type CreatePrivateChatResponse = {
+export type CreateGroupChatRequest = {
+  name: string;
+  users: string[];
+};
+
+export type CreateChatResponse = {
   id: string;
 };
 
@@ -24,75 +36,29 @@ export enum MessageType {
   TEXT = 1,
 }
 
-export type MessageCreateRequest = {
-  data: string;
-  type: MessageType;
-  roomID: string;
-};
-
 export enum MessageStatus {
   PENDING = 0,
   SENT = 1,
-  READ = 2,
-  FAIL = 3,
+  FAIL = 2,
 }
 
-export const MessageStatusLabels: Record<MessageStatus, string> = {
-  [MessageStatus.PENDING]: "Pending",
-  [MessageStatus.SENT]: "Sent",
-  [MessageStatus.READ]: "Read",
-  [MessageStatus.FAIL]: "Fail",
-};
+export const MessageInteractionSchema = z.object({
+  messageID: z.number(),
+  username: z.string(),
+  readAt: z.string(),
+});
 
-export type Message = {
-  id: string;
-  data: string;
-  sender: string;
-  type: MessageType;
-  sentAt: string;
-  roomID: string;
-  status: MessageStatus;
-  correlationID?: number;
-};
+export type MessageInteraction = z.infer<typeof MessageInteractionSchema>;
 
 export const MessageSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   data: z.string(),
   sender: z.string(),
   type: z.nativeEnum(MessageType),
   sentAt: z.string(),
   roomID: z.string(),
-  status: z.nativeEnum(MessageStatus),
+  interactions: z.array(MessageInteractionSchema),
+  correlationID: z.number().optional(),
 });
 
-export type MessageStatusUpdate = {
-  messageID: string;
-  status: MessageStatus;
-  roomID: string;
-};
-
-export const MessageStatusUpdateSchema = z.object({
-  roomID: z.string(),
-  messageID: z.string(),
-  status: z.nativeEnum(MessageStatus),
-});
-
-export type ReadRoomMessagesPacketPayload = {
-  roomID: string;
-  readBy: string;
-};
-
-export const ReadRoomMessagePacketPayloadSchema = z.object({
-  roomID: z.string(),
-  readBy: z.string(),
-});
-
-export const TypingEventPacketPayloadSchema = z.object({
-  roomID: z.string(),
-  user: z.string(),
-  typing: z.boolean(),
-});
-
-export type TypingEventPacketPayload = z.infer<
-  typeof TypingEventPacketPayloadSchema
->;
+export type Message = z.infer<typeof MessageSchema>;

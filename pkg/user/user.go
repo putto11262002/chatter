@@ -28,6 +28,7 @@ type UserWithoutSecrets struct {
 type UserStore interface {
 	CreateUser(ctx context.Context, user User) error
 	GetUserByUsername(ctx context.Context, username string) (*UserWithoutSecrets, error)
+	GetUsersByUsernames(ctx context.Context, usernames ...string) ([]UserWithoutSecrets, error)
 	ComparePassword(ctx context.Context, username, password string) (bool, error)
 	GetUsers(ctx context.Context, options ...getUserOptions) ([]UserWithoutSecrets, error)
 }
@@ -66,6 +67,40 @@ func (s *SQLiteUserStore) CreateUser(ctx context.Context, user User) error {
 	}
 
 	return nil
+}
+
+func (s *SQLiteUserStore) GetUsersByUsernames(ctx context.Context, usernames ...string) ([]UserWithoutSecrets, error) {
+	if len(usernames) == 0 {
+		return nil, nil
+	}
+
+	values := make([]interface{}, 0, len(usernames))
+
+	for _, username := range usernames {
+		values = append(values, username)
+	}
+
+	rows, err := s.db.QueryContext(ctx, "SELECT name, username FROM users WHERE username IN ("+strings.Repeat("?,", len(usernames)-1)+"?)", values...)
+
+	if err != nil {
+		return nil, fmt.Errorf("QueryContext: %w", err)
+	}
+	defer rows.Close()
+
+	var users []UserWithoutSecrets
+
+	for rows.Next() {
+		user := UserWithoutSecrets{}
+		if err := rows.Scan(&user.Name, &user.Username); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("rows.Scan: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
 
 func (s *SQLiteUserStore) GetUserByUsername(ctx context.Context, username string) (*UserWithoutSecrets, error) {

@@ -470,7 +470,6 @@ func Test_SendMessageToRoomHandler(t *testing.T) {
 			switch v := body.(type) {
 			case api.CreateMessageResponse:
 				assert.NotEmpty(t, v.ID)
-				assert.NoError(t, uuid.Validate(v.ID))
 			case api.ApiError[interface{}]:
 				assert.Equal(t, tt.expectedBody.(api.ApiError[interface{}]).Code, v.Code)
 				assert.Equal(t, tt.expectedBody.(api.ApiError[interface{}]).Message, v.Message)

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/putto11262002/chatter/pkg/auth"
 	"github.com/putto11262002/chatter/pkg/chat"
+	"github.com/putto11262002/chatter/pkg/chat/ws"
 	"github.com/putto11262002/chatter/pkg/user"
 )
 
@@ -61,13 +62,13 @@ func (a *Api) mountHandlers() {
 
 	chatHandler := NewChatHandler(chatStore)
 
-	hub := chat.NewChatterHub(a.context, chatStore)
+	hub := ws.NewChatterHub(a.context, chatStore)
 	go hub.Start()
 	// defer hub.Close()
 
 	authAdapter := &AuthAdapter{}
 
-	clientFactory := chat.NewHubClientFactory(hub, authAdapter)
+	clientFactory := ws.NewHubClientFactory(hub, authAdapter)
 
 	a.mux.Router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173"}, // TODO: change this to the actual frontend URL
@@ -87,12 +88,13 @@ func (a *Api) mountHandlers() {
 		r.With(JWTMiddleware(auth)).Get("/me", userHandler.MeHandler)
 	})
 
-	a.mux.Route("/chats", func(r *ApiMux) {
+	a.mux.Group(func(r *ApiMux) {
 		r.Use(JWTMiddleware(auth))
-		r.Post("/private", chatHandler.CreatePrivateChatHandler)
-		r.Get("/{roomID}", chatHandler.GetRoomByIDHandler)
-		r.Get("/me/rooms", chatHandler.GetMyUserRoomsHandler)
-		r.Post("/{roomID}/messages", chatHandler.SendMessageToRoomHandler)
+		r.Post("/rooms/private", chatHandler.CreatePrivateChatHandler)
+		r.Post("/rooms/group", chatHandler.CreateGroupChatHandler)
+		r.Get("/rooms/{roomID}", chatHandler.GetRoomByIDHandler)
+		r.Get("/users/me/rooms", chatHandler.GetMyUserRoomsHandler)
+		r.Post("/rooms/{roomID}/messages", chatHandler.SendMessageToRoomHandler)
 		r.Get("/rooms/{roomID}/messages", chatHandler.GetRoomMessagesHandler)
 	})
 

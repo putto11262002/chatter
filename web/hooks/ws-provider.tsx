@@ -1,13 +1,5 @@
 import { Button } from "@/components/ui/button";
-import {
-  createChatMessagePacket,
-  createPacket,
-  Packet,
-  PacketSchema,
-  PacketType,
-  ReadyState,
-  WS,
-} from "@/lib/ws";
+import { ReadyState, WS } from "@/lib/ws";
 import {
   createContext,
   useCallback,
@@ -17,26 +9,29 @@ import {
   useState,
 } from "react";
 import { Outlet } from "react-router-dom";
-import { useReceiveMessage } from "./chats";
-import {
-  Message,
-  MessageCreateRequest,
-  MessageSchema,
-  MessageStatus,
-  MessageStatusUpdate,
-  MessageStatusUpdateSchema,
-  ReadRoomMessagePacketPayloadSchema,
-  TypingEventPacketPayload,
-  TypingEventPacketPayloadSchema,
-} from "@/types/chat";
+import { Message, MessageType, Room } from "@/types/chat";
 import { useSWRConfig } from "swr";
 import { useSession } from "@/components/providers/session-provider";
+import {
+  BroadcastReadMessagePayloadSchema,
+  encodePacket,
+  Packet,
+  PacketType,
+  ReadMessagePayload,
+  SendMessageResponsePayloadSchema,
+  SendMessageRequestPayload,
+  TypingEventPayload,
+  TypingEventPayloadSchema,
+  BroadcastMessagePayloadSchema,
+  PresencePayloadSchema,
+} from "@/lib/ws/proto";
 
 type WSContext = {
-  sendMessage: (payload: MessageCreateRequest) => void;
-  readMessage: (roomID: string) => void;
+  sendMessage: (roomID: string, type: MessageType, data: string) => void;
+  readMessage: (roomID: string, messageID?: number) => void;
   emitTypingEvent: (roomID: string, typing: boolean) => void;
   typing: Record<string, string[]>;
+  online: Record<string, boolean>;
 };
 
 const wsContext = createContext<WSContext>({
@@ -44,6 +39,7 @@ const wsContext = createContext<WSContext>({
   readMessage: () => {},
   emitTypingEvent: () => {},
   typing: {},
+  online: {},
 });
 
 export const useWS = () => useContext(wsContext);
@@ -58,31 +54,61 @@ export default function WSProvider() {
 
   const [readyState, setReadyState] = useState(ReadyState.Connecting);
   const [typing, setTyping] = useState<Record<string, string[]>>({});
-  const { trigger } = useReceiveMessage();
+  const [online, setOnline] = useState<Record<string, boolean>>({});
   const { mutate } = useSWRConfig();
   const session = useSession();
 
   const emitTypingEvent = (roomID: string, typing: boolean) => {
-    const payload: TypingEventPacketPayload = {
+    const payload: TypingEventPayload = {
       roomID: roomID,
       typing: typing,
-      user: session.username,
+      username: session.username,
     };
-    const packet = createPacket(
-      PacketType.TypingEvent,
+
+    const packet = encodePacket(
+      PacketType.TypingEventPacket,
       JSON.stringify(payload)
     );
     ws.current.sendPacket(packet);
   };
 
-  const onReadRoomMessages = (roomID: string) => {
+  const handleBroadcastReadMessagePacket = (packet: Packet) => {
+    const payloadValidation = BroadcastReadMessagePayloadSchema.safeParse(
+      packet.payload
+    );
+
+    if (!payloadValidation.success) {
+      throw new Error(
+        "invalid BroadcastReadMessagePayload format: " +
+          JSON.stringify(payloadValidation.error.format())
+      );
+    }
+
+    const payload = payloadValidation.data;
     mutate(
-      `/api/chats/rooms/${roomID}/messages`,
+      `/api/rooms/${payload.roomID}/messages`,
       async (currentMessages: Message[] | undefined) => {
         if (!currentMessages) return [];
         return currentMessages.map((message) => {
-          if (message.status === MessageStatus.SENT) {
-            return { ...message, status: MessageStatus.READ };
+          if (
+            message.id <= payload.messageID &&
+            !message.interactions.find(
+              (i) => i.username === payload.username
+            ) &&
+            message.sender != payload.username
+          ) {
+            return {
+              ...message,
+              interactions: [
+                ...message.interactions,
+                {
+                  username: payload.username,
+                  readAt: payload.readAt,
+
+                  messageID: message.id,
+                },
+              ],
+            };
           }
           return message;
         });
@@ -92,67 +118,149 @@ export default function WSProvider() {
   };
 
   const readMessage = useCallback(
-    (roomID: string) => {
-      const packet = createPacket(
-        PacketType.ReadRoomMessages,
-        JSON.stringify({ roomID, readBy: session.username })
+    (roomID: string, messageID?: number) => {
+      const payload: ReadMessagePayload = {
+        roomID: roomID,
+      };
+      const packet = encodePacket(
+        PacketType.ReadMessagePacket,
+        JSON.stringify(payload)
       );
+
       ws.current.sendPacket(packet);
+      if (!messageID) return;
+
       mutate(
-        `/api/chats/rooms/${roomID}/messages`,
-        async (currentMessages: Message[] | undefined) => {
-          if (!currentMessages) return [];
-          return currentMessages.map((message) => {
-            if (message.status === MessageStatus.SENT) {
-              console.log("readMessage", message);
-              return { ...message, status: MessageStatus.READ };
-            }
-            return message;
-          });
-        }
+        `/api/rooms/${roomID}`,
+        async (room: Room | undefined) => {
+          if (!room) return;
+          return {
+            ...room,
+            users: room.users.map((u) => {
+              if (u.username === session.username) {
+                return {
+                  ...u,
+                  lastMessageRead: messageID,
+                };
+              }
+              return u;
+            }),
+          };
+        },
+        { revalidate: false }
       );
     },
     [ws.current, mutate]
   );
 
-  const onReceivedUpdateMessageStatus = (
-    correlationID: number,
-    { messageID, status, roomID }: MessageStatusUpdate
-  ) => {
+  const handleBroadcastMessagePacket = (packet: Packet) => {
+    const payloadValidation = BroadcastMessagePayloadSchema.safeParse(
+      packet.payload
+    );
+
+    if (!payloadValidation.success) {
+      throw new Error(
+        "invalid BroadcastMessagePayload format: " +
+          JSON.stringify(payloadValidation.error.format())
+      );
+    }
+
+    const payload = payloadValidation.data;
+
     mutate(
-      `/api/chats/rooms/${roomID}/messages`,
+      `/api/rooms/${payload.roomID}/messages`,
+      async (currentMessages: Message[] | undefined) => {
+        if (!currentMessages) return [];
+        return [payload, ...currentMessages];
+      },
+      { revalidate: false }
+    );
+  };
+
+  const handleSendMessageResponsePacket = (packet: Packet) => {
+    const payloadValidation = SendMessageResponsePayloadSchema.safeParse(
+      packet.payload
+    );
+
+    if (!payloadValidation.success) {
+      throw new Error(
+        "invalid SendMessageResponsePayload format: " +
+          JSON.stringify(payloadValidation.error.format())
+      );
+    }
+
+    const payload = payloadValidation.data;
+
+    mutate(
+      `/api/rooms/${payload.roomID}/messages`,
       async (currentMessages: Message[] | undefined) => {
         if (!currentMessages) return [];
         return currentMessages.map((message) => {
           if (
             typeof message.correlationID === "number" &&
-            message.correlationID === correlationID
+            message.correlationID === packet.correlationID
           ) {
-            console.log("updating message status", messageID, status);
-            return { ...message, status, id: messageID };
+            return {
+              ...message,
+              id: payload.messageID,
+              sentAt: payload.sentAt,
+              correlationID: undefined,
+            };
           }
           return message;
         });
       },
       { revalidate: false }
     );
+
+    mutate(
+      `/api/rooms/${payload.roomID}`,
+      async (room: Room | undefined) => {
+        if (!room) return;
+        return {
+          ...room,
+          users: room.users.map((u) => {
+            if (u.username === session.username) {
+              return {
+                ...u,
+                lastMessageRead: payload.messageID,
+              };
+            }
+            return u;
+          }),
+        };
+      },
+      { revalidate: false }
+    );
   };
 
-  const sendMessage = (message: MessageCreateRequest) => {
-    const packet = createChatMessagePacket(message);
+  const sendMessage = (roomID: string, type: MessageType, data: string) => {
+    const payload: SendMessageRequestPayload = {
+      roomID: roomID,
+      type: type,
+      data: data,
+    };
+
+    const packet = encodePacket(
+      PacketType.SendMessageRequestPacket,
+      JSON.stringify(payload)
+    );
+
     ws.current.sendPacket(packet);
+
     const newMessage: Message = {
-      id: "",
+      id: 0,
       correlationID: packet.correlationID,
-      data: message.data,
-      type: message.type,
+      data: data,
+      type: type,
       sender: session.username,
       sentAt: new Date().toISOString(),
-      roomID: message.roomID,
-      status: MessageStatus.PENDING,
+      roomID: roomID,
+      interactions: [],
     };
+
     mutate(
-      `/api/chats/rooms/${message.roomID}/messages`,
+      `/api/rooms/${roomID}/messages`,
       async (currentMessages: Message[] | undefined) => [
         newMessage,
         ...(currentMessages ? currentMessages : []),
@@ -163,29 +271,41 @@ export default function WSProvider() {
     );
   };
 
-  const handleTypingEvent = (payload: TypingEventPacketPayload) => {
-    if (payload.typing) {
+  const handleTypingEventPacket = (packet: Packet) => {
+    const payloadValidartion = TypingEventPayloadSchema.safeParse(
+      packet.payload
+    );
+
+    if (!payloadValidartion.success) {
+      throw new Error(
+        "invalid TypingEventPayload format: " +
+          JSON.stringify(payloadValidartion.error.format())
+      );
+    }
+
+    const { typing, username, roomID } = payloadValidartion.data;
+    if (typing) {
       setTyping((prev) => {
-        if (prev[payload.roomID]) {
-          const users = prev[payload.roomID];
+        if (prev[roomID]) {
+          const users = prev[roomID];
           return {
             ...prev,
-            [payload.roomID]: [...users, payload.user],
+            [roomID]: [...users, username],
           };
         } else {
           return {
             ...prev,
-            [payload.roomID]: [payload.user],
+            [roomID]: [username],
           };
         }
       });
     } else {
       setTyping((prev) => {
-        if (prev[payload.roomID]) {
-          const users = prev[payload.roomID];
+        if (prev[roomID]) {
+          const users = prev[roomID];
           return {
             ...prev,
-            [payload.roomID]: users.filter((u) => u !== payload.user),
+            [roomID]: users.filter((u) => u !== username),
           };
         } else {
           return prev;
@@ -194,62 +314,44 @@ export default function WSProvider() {
     }
   };
 
-  const handlePacketReceived = (packet: Packet) => {
-    let parsedMessage = {};
-    try {
-      parsedMessage = JSON.parse(packet.data);
-    } catch (e) {
-      console.log("error parsing message", e);
+  const handlePresencePacket = (packet: Packet) => {
+    const payloadValidation = PresencePayloadSchema.safeParse(packet.payload);
+    if (!payloadValidation.success) {
+      throw new Error(
+        "invalid PresencePayload format: " +
+          JSON.stringify(payloadValidation.error.format())
+      );
     }
-    switch (packet.type) {
-      case PacketType.ChatMessage:
-        const messageValidation = MessageSchema.safeParse(parsedMessage);
-        if (messageValidation.success) {
-          trigger(messageValidation.data);
-        } else {
-          console.log(
-            "invalid message received",
-            "\ndata",
-            packet.data,
-            "\nerror",
-            messageValidation.error.format()
-          );
-        }
-        break;
+    const payload = payloadValidation.data;
+    setOnline((prev) => ({ ...prev, [payload.username]: payload.presence }));
+  };
 
-      case PacketType.ChatMessageStatusUpdate:
-        console.log("message status update received", parsedMessage);
-        const validation = MessageStatusUpdateSchema.safeParse(parsedMessage);
-        if (validation.success) {
-          onReceivedUpdateMessageStatus(packet.correlationID, validation.data);
-        } else {
-          console.log(
-            "invalid message status update received",
-            "\ndata",
-            packet.data,
-            "\nerror",
-            validation.error.format()
-          );
-        }
-        break;
+  const handlePacketReceived = (packet: Packet) => {
+    try {
+      switch (packet.type) {
+        case PacketType.SendMessageResponsePacket:
+          handleSendMessageResponsePacket(packet);
+          break;
 
-      case PacketType.ReadRoomMessages:
-        const v = ReadRoomMessagePacketPayloadSchema.safeParse(parsedMessage);
-        if (v.success) {
-          onReadRoomMessages(v.data.roomID);
-        }
-        console.log(v);
-        break;
+        case PacketType.BroadcastMessagePacket:
+          handleBroadcastMessagePacket(packet);
+          break;
 
-      case PacketType.TypingEvent:
-        const vv = TypingEventPacketPayloadSchema.safeParse(parsedMessage);
-        if (vv.success) {
-          handleTypingEvent(vv.data);
-        }
-        break;
+        case PacketType.BroadcastReadMessagePacket:
+          handleBroadcastReadMessagePacket(packet);
+          break;
+        case PacketType.TypingEventPacket:
+          handleTypingEventPacket(packet);
+          break;
 
-      default:
-        console.log("Cannot handle packet", packet);
+        case PacketType.PresencePacket:
+          handlePresencePacket(packet);
+          break;
+        default:
+          console.log("Cannot handle packet", packet);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -271,8 +373,8 @@ export default function WSProvider() {
 
   if (readyState === ReadyState.Closed) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center">
-        <p>Connection closed</p>
+      <div className="w-screen h-screen flex flex-col gap-4 items-center justify-center">
+        <p>You are offline</p>
         <Button onClick={() => ws.current.connect()}>Reconnect</Button>
       </div>
     );
@@ -280,7 +382,13 @@ export default function WSProvider() {
 
   return (
     <wsContext.Provider
-      value={{ sendMessage, readMessage, emitTypingEvent, typing }}
+      value={{
+        sendMessage,
+        readMessage,
+        emitTypingEvent,
+        typing,
+        online,
+      }}
     >
       <Outlet />
     </wsContext.Provider>
@@ -290,4 +398,9 @@ export default function WSProvider() {
 export const useTyping = (roomID: string) => {
   const { typing } = useWS();
   return typing[roomID] || [];
+};
+
+export const usePresence = (usernames: string[]) => {
+  const { online: presence } = useWS();
+  return usernames.map((username) => presence[username]);
 };

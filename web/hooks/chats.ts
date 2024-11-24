@@ -1,38 +1,60 @@
 import useSWRMutation from "swr/mutation";
 import {
   CreatePrivateChatRequest,
-  CreatePrivateChatResponse,
+  CreateChatResponse,
   Message,
-  MessageCreateRequest,
-  MessageStatus,
+  Room,
+  CreateGroupChatRequest,
+  RoomView,
 } from "@/types/chat";
 import { api } from "@/api";
-import useSWR, { mutate, useSWRConfig } from "swr";
-import { UserRoom } from "@/types/user";
-import { useWS } from "./ws-provider";
-import { createChatMessagePacket } from "@/lib/ws";
-import { useSession } from "@/components/providers/session-provider";
+import useSWR, { useSWRConfig } from "swr";
 
 export const useCreatePrivateChat = () => {
   const { mutate } = useSWRConfig();
   return useSWRMutation(
-    "/api/chats/private",
+    "/api/rooms/private",
     async (url, { arg }: { arg: CreatePrivateChatRequest }) => {
       const res = await api.post(url, arg);
-      return res.data as CreatePrivateChatResponse;
+      return res.data as CreateChatResponse;
     },
     {
-      onSuccess: () => mutate("/api/chats/me/rooms"),
+      onSuccess: () => mutate("/api/users/me/rooms"),
     }
+  );
+};
+
+export const useCreateGroupChat = () => {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    "/api/rooms/group",
+    async (url, { arg }: { arg: CreateGroupChatRequest }) => {
+      const res = await api.post(url, arg);
+      return res.data as CreateChatResponse;
+    },
+    {
+      onSuccess: () => mutate("/api/users/me/rooms"),
+    }
+  );
+};
+
+export const useRoom = (roomID?: string) => {
+  return useSWR(
+    roomID ? `/api/rooms/${roomID}` : false,
+    async (url) => {
+      const res = await api.get(url);
+      return res.data as Room;
+    },
+    {}
   );
 };
 
 export const useMyRooms = () => {
   return useSWR(
-    "/api/chats/me/rooms",
+    "/api/users/me/rooms",
     async (url) => {
       const res = await api.get(url);
-      return res.data as UserRoom[];
+      return res.data as RoomView[];
     },
     {}
   );
@@ -56,44 +78,12 @@ export const useReceiveMessage = () => {
   };
 };
 
-export const useSendMessage = (roomID: string) => {
-  const ws = useWS();
-  const { mutate } = useSWRConfig();
-  const session = useSession();
-  return useSWRMutation(
-    `/api/chats/${roomID}/messages`,
-    async (url, { arg }: { arg: Pick<Message, "data" | "type"> }) => {
-	const packet = createChatMessagePacket({ ...arg, roomID })
-      ws.sendPacket(packet);
-
-      const newMessage: Message = {
-	  id: "",
-	  correlationID: packet.correlationID,
-        data: arg.data,
-        type: arg.type,
-        sender: session.username,
-        sentAt: new Date().toISOString(),
-        roomID: roomID,
-        status: MessageStatus.PENDING,
-      };
-
-      mutate(
-        `/api/chats/rooms/${roomID}/messages`,
-        async (currentMessages: Message[] | undefined) => [
-          newMessage,
-          ...(currentMessages ? currentMessages : []),
-        ],
-        {
-          revalidate: false,
-        }
-      );
+export const useChatMessageHistory = (roomID?: string) => {
+  return useSWR(
+    roomID ? `/api/rooms/${roomID}/messages` : false,
+    async (url) => {
+      const res = await api.get(url);
+      return res.data as Message[];
     }
   );
-};
-
-export const useChatMessageHistory = (roomID: string) => {
-  return useSWR(`/api/chats/rooms/${roomID}/messages`, async (url) => {
-    const res = await api.get(url);
-    return res.data as Message[];
-  });
 };
