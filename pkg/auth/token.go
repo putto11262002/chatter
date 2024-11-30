@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/putto11262002/chatter/pkg/user"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/putto11262002/chatter/pkg/user"
 )
 
 var (

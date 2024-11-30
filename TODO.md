@@ -46,7 +46,7 @@
 
 - [x] Store last read message in room_user so when the user is reading messages we don't have to scan through the whole messages table only have to scan from the last onwards
 
-- [ ] Do not have to store read in message_interaction just store a pointer to the last message read in room_user.
+- [x] Do not have to store read in message_interaction just store a pointer to the last message read in room_user.
       By doing so we are assuming that the user would have read all the previous messages before sending a message This may not be the most provide the most accurate read status but it is efficient.
 
 - [ ] Buffer pools
@@ -64,8 +64,8 @@
 
 ### Reading List
 
-- https://bravenewgeek.com/benchmarking-message-queue-latency/
+- [x] https://bravenewgeek.com/benchmarking-message-queue-latency/
 
-- https://medium.com/@srinathperera/how-do-we-measure-the-performance-of-a-microservice-service-or-server-450c562854a7
+- [x] https://medium.com/@srinathperera/how-do-we-measure-the-performance-of-a-microservice-service-or-server-450c562854a7
 
-- https://jvm-gaming.org/t/how-to-properly-benchmark-server-performance/54489
+- [ ] https://jvm-gaming.org/t/how-to-properly-benchmark-server-performance/54489

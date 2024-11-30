@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,12 +25,25 @@ const (
 	maxMessageSize = 512
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	// Delegate the check to CORS middleware
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 type HubClient struct {
-	id   string
-	hub  Hub
-	conn *websocket.Conn
-	mu   sync.RWMutex
-	send chan Message
+	id          string
+	hub         Hub
+	conn        *websocket.Conn
+	mu          sync.RWMutex
+	send        chan *Response
+	decoder     PacketDecoder
+	encoder     PacketEncoder
+	ctx         context.Context
+	messageType int
 }
 
 func (c *HubClient) ID() string {
@@ -39,13 +53,13 @@ func (c *HubClient) ID() string {
 	return c.id
 }
 
-func (c *HubClient) Send(msg Message) {
+func (c *HubClient) Send(data *Response) {
 	if c == nil {
 		return
 	}
 	// TODO: non blocking write using select
 
-	c.send <- msg
+	c.send <- data
 }
 
 func (c *HubClient) Close() error {
@@ -62,12 +76,13 @@ func (c *HubClient) readPump() {
 	}()
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
-	fmt.Printf("readPump: %v\n", c.id)
 	for {
-		var message JsonMessage
-		err := c.conn.ReadJSON(&message)
+		mt, r, err := c.conn.NextReader()
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 				return
@@ -78,14 +93,26 @@ func (c *HubClient) readPump() {
 				return
 			}
 
-			log.Printf("reading message: %v", err)
+			log.Printf("conn.ReadJsono: %v", err)
 
 			return
 		}
 
-		fmt.Println("message: ", message)
+		packet, err := c.decoder.Decode(r, mt)
+		if err != nil {
+			log.Printf("decoder.Decode: %v", err)
+			continue
+		}
 
-		c.hub.Broadcast(message.Message(c.id))
+		ctx := Request{
+			Payload:       packet.Payload,
+			Type:          packet.Type,
+			Context:       c.ctx,
+			CorrelationID: packet.CorrelationID,
+			Src:           c.id,
+		}
+
+		c.hub.Broadcast(&ctx)
 
 	}
 
@@ -100,6 +127,7 @@ func (c *HubClient) writePump() (err error) {
 	defer func() {
 		ticker.Stop()
 		if err != nil {
+			fmt.Printf("writePump close connection because: %v\n", err)
 			c.hub.Unregister(c)
 			c.conn.Close()
 		}
@@ -116,36 +144,50 @@ func (c *HubClient) writePump() (err error) {
 
 				return nil
 			}
-
-			err = c.conn.WriteJSON(message)
+			w, err := c.conn.NextWriter(c.encoder.MessageType())
 
 			if err != nil {
-				return err
+				return fmt.Errorf("conn.NextWriter: %v", err)
 			}
+
+			c.encoder.Encode(w, &Packet{
+				Type:          message.Type,
+				Payload:       message.Payload,
+				CorrelationID: message.CorrelationID,
+			})
+
+			w.Close()
 
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			fmt.Printf("sending ping to %v\n", c.id)
 			err = c.conn.WriteMessage(websocket.PingMessage, nil)
 			if err != nil {
 				return err
+
 			}
 		}
 	}
 }
 
-type AuthAdapter interface {
-	Authenticate(r *http.Request) (string, error)
-}
-
 type HubClientFactory struct {
-	hub     Hub
+	hub Hub
+	// AuthAdapter is used to retrieve the client id
 	adapter AuthAdapter
+	// Context passwed to the client
+	// If the is nill the request context is used
+	baseCtx  context.Context
+	decoder  PacketDecoder
+	enconder PacketEncoder
 }
 
-func NewHubClientFactory(hub Hub, adapter AuthAdapter) *HubClientFactory {
+func NewHubClientFactory(hub Hub, adapter AuthAdapter, baseCtx context.Context, encoder PacketEncoder, decoder PacketDecoder) *HubClientFactory {
 	return &HubClientFactory{
-		hub:     hub,
-		adapter: adapter,
+		hub:      hub,
+		adapter:  adapter,
+		baseCtx:  baseCtx,
+		enconder: encoder,
+		decoder:  decoder,
 	}
 }
 
@@ -162,11 +204,21 @@ func (f *HubClientFactory) HandleFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var ctx context.Context
+	if f.baseCtx != nil {
+		ctx = f.baseCtx
+	} else {
+		ctx = r.Context()
+	}
+
 	client := &HubClient{
-		hub:  f.hub,
-		conn: conn,
-		send: make(chan Message, SendChannelSize),
-		id:   id,
+		ctx:     ctx,
+		hub:     f.hub,
+		conn:    conn,
+		send:    make(chan *Response),
+		id:      id,
+		encoder: f.enconder,
+		decoder: f.decoder,
 	}
 
 	f.hub.Register(client)
