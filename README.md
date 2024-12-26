@@ -8,3 +8,4 @@ A real-time messaging application that can be deployed anywhere with just a sing
 - Typing Indicators: See when others are typing in real time.
 - Read and Sent Notifications: Acknowledge message delivery and reading status.
 - User Presence Detection: Monitor user online/offline status for enhanced interactivity.
+

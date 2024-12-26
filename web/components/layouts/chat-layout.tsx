@@ -39,15 +39,11 @@ export default function ChatLayout() {
                         key={index}
                         className={cn(
                           "py-2 px-3 border-b hover:bg-accent cursor-pointer flex gap-3 items-center",
-                          roomID === room.roomID && "bg-accent"
+                          roomID === room.roomID && "bg-accent",
+                          anyoneOnline && "bg-green-200"
                         )}
                       >
                         <p className="font-medium grow">{room.roomName}</p>
-                        <div className="shrink-0">
-                          {anyoneOnline && (
-                            <div className="w-4 h-4 rounded-full bg-green-300 border border-green-600" />
-                          )}
-                        </div>
                       </div>
                     </Link>
                   );

@@ -2,17 +2,61 @@ package server
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"time"
 )
 
+// Server is a wrapper around http.Server that implements graceful shutdown.
 type Server struct {
 	*http.Server
-	// CleanUpFuncs is a list of functions that will be called when the server has successfully shutdown.
-	CleanUpFuncs []func(ctx context.Context)
+	logger          *slog.Logger
+	shutdownTimeout time.Duration
+}
+
+type ServerOption = func(*Server)
+
+func New(addr string, opts ...ServerOption) *Server {
+	server := &Server{
+		Server: &http.Server{
+			Addr: addr,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(server)
+	}
+
+	return server
+}
+
+func WithBaseContext(baseCtx context.Context) ServerOption {
+	return func(s *Server) {
+		s.BaseContext = func(_ net.Listener) context.Context {
+			return baseCtx
+		}
+	}
+}
+
+func WithHandler(handler http.Handler) ServerOption {
+	return func(s *Server) {
+		s.Handler = handler
+	}
+}
+
+func WithLogger(logger *slog.Logger) ServerOption {
+	return func(s *Server) {
+		s.logger = logger
+	}
+}
+
+func WithShutdownTimeout(timeout time.Duration) ServerOption {
+	return func(s *Server) {
+		s.shutdownTimeout = timeout
+	}
 }
 
 func (s *Server) Start(ctx context.Context) {
@@ -26,40 +70,33 @@ func (s *Server) Start(ctx context.Context) {
 	go func() {
 		<-ctx.Done()
 
-		log.Println("server shuting down...")
+		s.logger.Info("server shutting down...")
 
-		shutdownCtx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 
 		go func() {
 			<-shutdownCtx.Done()
 			if shutdownCtx.Err() == context.DeadlineExceeded {
-				log.Println("gracefull shotdown timed out.. forcing exit.")
+				s.logger.Info("gracefull shotdown timed out.. forcing exit.")
 				os.Exit(1)
 			}
 
 		}()
 
 		err := s.Server.Shutdown(shutdownCtx)
-
-		// TODO: maybe run the cleanup functions even if there is an error?
 		if err != nil {
-			log.Println("server shutdown: %v", err)
+			s.logger.Error(fmt.Sprintf("server shutdown: %v", err))
 			os.Exit(1)
-		}
-
-		// TODO: run them concurrently?
-		for _, cf := range s.CleanUpFuncs {
-			cf(shutdownCtx)
 		}
 
 		close(done)
 	}()
 
-	log.Printf("server started at %s\n", s.Server.Addr)
-
+	s.logger.Info(fmt.Sprintf("server started at %s", s.Server.Addr))
 	err := s.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
-		log.Println("server exit: %v", err)
+		s.logger.Error(fmt.Sprintf("server exit: %v", err))
 		os.Exit(1)
 
 	}

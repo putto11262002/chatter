@@ -4,9 +4,7 @@ import Signin from "./pages/signin";
 import SessionProvider from "./components/providers/session-provider";
 import { SWRConfig } from "swr";
 import { apiErrorMiddleware, sessionMiddleware } from "./hooks/swr-middlewares";
-import ChatLayout from "./components/layouts/chat-layout";
-import ChatArea from "./components/chat/chat-area";
-import WSProvider from "./hooks/ws-provider";
+import { ChatProvider } from "./hooks/chat/provider";
 
 export const router = createBrowserRouter([
   {
@@ -36,17 +34,11 @@ export const router = createBrowserRouter([
 
             children: [
               {
-                element: <WSProvider />,
+                element: <ChatProvider />,
                 children: [
                   {
                     path: "/",
-                    element: <ChatLayout />,
-                    children: [
-                      {
-                        path: "/:roomID",
-                        element: <ChatArea />,
-                      },
-                    ],
+                    element: <div>Hi there</div>,
                   },
                 ],
               },

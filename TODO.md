@@ -14,7 +14,7 @@
 
 - [ ] Impose rate limit on the server
 
-- [ ] Implement graceful shotdown for server.
+- [x] Implement graceful shotdown for server.
 
   - the the websocket connection is not shutdown automatically when calling server.Shotdown
     because the connection has ben hijacked by the websocket handler.
@@ -24,19 +24,20 @@
 
 - [ ] Impose a timeout to each operation in the hub via context
 
-- [ ] Make the hub only responsible for routing messages.
+- [x] Make the hub only responsible for routing messages.
   - move all the message parsing to the client. It is the client's responsible to ensure the incoming packs are valid
   - move all the database operations from the hub. The hub should spawn a new go routine to handle the database operations.
     Once these database operations is done send back the response to the hub via a channel and the hub will broadcast the response to the clients.
 
 ## API
 
-- [ ] sign in should also return the user so that it can be used to populate the client state
+- [x] sign in should also return the user so that it can be used to populate the client state
 
 ## Chat Store
 
-- [ ] Add read interaction for sender when sending a message
-- [ ] Implement pagination for messages, rooms
+- [x] Add read interaction for sender when sending a message
+- [x] Implement pagination for messages, rooms
+- [x] Implement pagination for room summaries
 
 ## Frontend
 
@@ -46,7 +47,7 @@
 
 - [x] Store last read message in room_user so when the user is reading messages we don't have to scan through the whole messages table only have to scan from the last onwards
 
-- [ ] Do not have to store read in message_interaction just store a pointer to the last message read in room_user.
+- [x] Do not have to store read in message_interaction just store a pointer to the last message read in room_user.
       By doing so we are assuming that the user would have read all the previous messages before sending a message This may not be the most provide the most accurate read status but it is efficient.
 
 - [ ] Buffer pools
@@ -64,8 +65,8 @@
 
 ### Reading List
 
-- https://bravenewgeek.com/benchmarking-message-queue-latency/
+- [x] https://bravenewgeek.com/benchmarking-message-queue-latency/
 
-- https://medium.com/@srinathperera/how-do-we-measure-the-performance-of-a-microservice-service-or-server-450c562854a7
+- [x] https://medium.com/@srinathperera/how-do-we-measure-the-performance-of-a-microservice-service-or-server-450c562854a7
 
-- https://jvm-gaming.org/t/how-to-properly-benchmark-server-performance/54489
+- [ ] https://jvm-gaming.org/t/how-to-properly-benchmark-server-performance/54489
