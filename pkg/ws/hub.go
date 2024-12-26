@@ -1,61 +1,254 @@
-package ws
+package hub
 
 import (
 	"context"
+	"fmt"
+	"iter"
+	"log"
+	"log/slog"
+	"maps"
+	"net/http"
+	"os"
+	"sync"
 )
 
-const (
-	ChatMessage MessageType = iota
-)
-
-// MessageType is the type of the message.
-// 0-50 is reserved for system messages.
-// 50-100 can be used to defined user-level messages.
-type MessageType uint8
-
-type StoreAapter interface {
-	GetRoomMembers(string) ([]string, error)
-	PersistMessage(Message) error
+type Hub struct {
+	clients        map[string]*Client
+	channels       map[string]*Channel
+	connectChan    chan *Client
+	disconnectChan chan *Client
+	request        chan *Request
+	// exit is used to signal that the hub should start exiting
+	exit              chan struct{}
+	logger            *slog.Logger
+	handlers          map[string]Handler
+	connectHandler    func(*Hub, *Client) error
+	disconnectHandler func(*Hub, *Client) error
+	baseCtx           context.Context
+	wg                sync.WaitGroup
+	authenticator     Authenticator
 }
 
-type HubStore interface {
-	GetRoomMembers(context.Context, string) ([]string, error)
-	PersistMessage(context.Context, Message) error
+func New(opts ...HubOption) *Hub {
+	hub := &Hub{
+		clients:        make(map[string]*Client),
+		channels:       make(map[string]*Channel),
+		connectChan:    make(chan *Client),
+		disconnectChan: make(chan *Client),
+		request:        make(chan *Request),
+		exit:           make(chan struct{}),
+		logger: slog.New(slog.NewJSONHandler(os.Stdout,
+			&slog.HandlerOptions{Level: slog.LevelDebug})),
+		baseCtx:       context.TODO(),
+		handlers:      make(map[string]Handler),
+		authenticator: &QueryAuthenticator{queryParam: "id"},
+	}
+
+	for _, opt := range opts {
+		opt(hub)
+	}
+	return hub
 }
 
-type Client interface {
-	ID() string
-	Send(Message)
-	Close() error
+type HubOption func(*Hub)
+
+func WithLogger(logger *slog.Logger) HubOption {
+	return func(h *Hub) {
+		h.logger = logger
+	}
 }
 
-type Hub interface {
-	Register(client Client)
-	Unregister(client Client)
-	Broadcast(message Message)
-	Close() error
-	Start()
+func WithBaseContext(ctx context.Context) HubOption {
+	return func(h *Hub) {
+		h.baseCtx = ctx
+	}
 }
 
-type HubMessageType = uint8
-
-const (
-	ChatMessageType HubMessageType = iota
-	EventMessageType
-	ErrorMessageType
-)
-
-type HubMessage struct {
-	Type HubMessageType
-	From string
-	Data []byte
+func (hub *Hub) Start() {
+	hub.wg.Add(1)
+	go hub.start()
+	hub.logger.Debug("hub started")
 }
 
-type Message struct {
-	Type MessageType
-	Data string
-	// To is the room id the message is sent to.
-	// If it is empty, the message is broadcast to all clients apart from the sender.
-	To   string
-	From string
+func (hub *Hub) start() {
+	defer func() {
+		hub.wg.Done()
+		hub.logger.Debug("hub exited")
+	}()
+	for {
+
+		select {
+		case <-hub.exit:
+			return
+		case c := <-hub.connectChan:
+			hub.clients[c.ID] = c
+			c.logger.Debug("connected")
+			if hub.connectHandler != nil {
+				hub.connectHandler(hub, c)
+			}
+		case c := <-hub.disconnectChan:
+			hub.disconnect(c)
+		case ctx := <-hub.request:
+			h, ok := hub.handlers[ctx.Packet.Type]
+			if !ok {
+				ctx.Sender.logger.Error(fmt.Sprintf("handler(%s): not found", ctx.Packet.Type))
+			}
+			err := h(ctx)
+			if err != nil {
+				ctx.Sender.logger.Error(
+					fmt.Sprintf("handler(%s): %v", ctx.Packet.Type, err))
+			}
+		}
+
+	}
+}
+
+// Close start closing the hub.
+// It does not wait for the clean up to complete.
+// The closing sequence is as following:
+//  1. Deregister connection from the hub then signal connection handler goroutine to close the connection then exit.
+//  2. Signal the hub main goroutine to exit.
+func (hub *Hub) Close() {
+	hub.logger.Debug("closing client connections")
+	for _, c := range hub.clients {
+		hub.disconnect(c)
+	}
+	hub.logger.Debug("exiting hub")
+	close(hub.exit)
+}
+
+func (hub *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	id, err := hub.authenticator.Authenticate(r)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Upgrade: %v", err)
+	}
+
+	c := NewClient(hub, conn,
+		hub.logger.With(slog.String("client.id", id)), id)
+
+	hub.connectChan <- c
+
+	hub.wg.Add(2)
+	go c.readLoop()
+	go c.writeLoop()
+}
+
+func (hub *Hub) Wait() {
+	hub.logger.Debug("waiting for hub to close")
+	hub.wg.Wait()
+}
+
+func (hub *Hub) SetHandle(t string, h Handler) {
+	hub.handlers[t] = h
+}
+
+func (hub *Hub) SetConnectHandler(h func(*Hub, *Client) error) {
+	hub.connectHandler = h
+
+}
+
+func (hub *Hub) SetDisconnectHandler(h func(*Hub, *Client) error) {
+	hub.disconnectHandler = h
+}
+
+// CreateChannel creates a new channel with a given id and adds it to the hub.
+func (hub *Hub) CreateChannel(id string) {
+	cha := NewChannel(id)
+	hub.channels[id] = cha
+}
+
+// ListChannels returns a sequence of all the channels that are added to the hub.
+func (hub *Hub) ListChannels() iter.Seq[*Channel] {
+	return maps.Values(hub.channels)
+}
+
+// GetChannel returns a channel with a given id.
+// If the channel is not found, the second return value is false.
+func (hub *Hub) GetChannel(id string) (*Channel, bool) {
+	cha, ok := hub.channels[id]
+	return cha, ok
+}
+
+// Subscribe subscribes a client to a channel.
+// If the channel does not exist, it does nothing.
+func (hub *Hub) Subscribe(client string, channel string) {
+	if _, ok := hub.clients[client]; !ok {
+		return
+	}
+	if _, ok := hub.channels[channel]; !ok {
+		return
+	}
+	hub.channels[channel].subscribe(client)
+}
+
+// Unsubscribe unsubscribes a client from a channel.
+// If the channel does not exist, it does nothing.
+func (hub *Hub) Unsubscribe(client *Client, channel string) {
+	cha, ok := hub.channels[channel]
+	if !ok {
+		return
+	}
+	cha.unsubscribe(client)
+}
+
+// BroadcastToClients broadcasts a message to a list of clients.
+func (hub *Hub) BroadcastToClients(res *Packet, ids ...string) {
+	for _, id := range ids {
+		c, ok := hub.clients[id]
+		if !ok {
+			continue
+		}
+		hub.sendOrDisconnect(c, res)
+	}
+}
+
+// Broadcast broadcasts a message to all the clients that are connected to the hub.
+func (hub *Hub) Broadcast(res *Packet) {
+	for _, c := range hub.clients {
+		hub.sendOrDisconnect(c, res)
+	}
+}
+
+// BroadcastToChannels broadcasts a message to a list of channels.
+func (hub *Hub) BroadcastToChannels(res *Packet, channels ...string) {
+	for _, chn := range channels {
+		ch, ok := hub.channels[chn]
+		if !ok {
+			continue
+		}
+		for sub := range ch.Subscribers() {
+			c, ok := hub.clients[sub]
+			if !ok {
+				continue
+			}
+			hub.sendOrDisconnect(c, res)
+		}
+	}
+}
+
+// sendOrDisconnect sends a response message to a client. If the send channel of the
+// client is blocked, it disconnects the client.
+func (hub *Hub) sendOrDisconnect(c *Client, res *Packet) {
+	select {
+	case c.send <- res:
+	default:
+		hub.disconnect(c)
+	}
+}
+
+func (hub *Hub) disconnect(c *Client) {
+	_, ok := hub.clients[c.ID]
+	if !ok {
+		return
+	}
+	delete(hub.clients, c.ID)
+	close(c.send)
+	if hub.disconnectHandler != nil {
+		hub.disconnectHandler(hub, c)
+	}
 }
