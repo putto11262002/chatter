@@ -1,15 +1,19 @@
-package ws
+package hub
 
 import (
-	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 const (
 	// Time allowed to write a message to the peer.
@@ -25,54 +29,31 @@ const (
 	maxMessageSize = 512
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// Delegate the check to CORS middleware
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+type Client struct {
+	conn   *websocket.Conn
+	ID     string
+	send   chan *Packet
+	hub    *Hub
+	ticker *time.Ticker
+	logger *slog.Logger
 }
 
-type HubClient struct {
-	id          string
-	hub         Hub
-	conn        *websocket.Conn
-	mu          sync.RWMutex
-	send        chan *Response
-	decoder     PacketDecoder
-	encoder     PacketEncoder
-	ctx         context.Context
-	messageType int
-}
-
-func (c *HubClient) ID() string {
-	if c == nil {
-		return ""
+func NewClient(hub *Hub, conn *websocket.Conn, logger *slog.Logger, id string) *Client {
+	return &Client{
+		send:   make(chan *Packet),
+		ticker: time.NewTicker(pingPeriod),
+		conn:   conn,
+		hub:    hub,
+		logger: logger,
 	}
-	return c.id
 }
 
-func (c *HubClient) Send(data *Response) {
-	if c == nil {
-		return
-	}
-	// TODO: non blocking write using select
-
-	c.send <- data
-}
-
-func (c *HubClient) Close() error {
-	if c == nil {
-		return nil
-	}
-	return c.conn.Close()
-}
-
-func (c *HubClient) readPump() {
+func (c *Client) readLoop() {
 	defer func() {
-		c.hub.Unregister(c)
+		c.hub.disconnectChan <- c
 		c.conn.Close()
+		c.hub.wg.Done()
+		c.logger.Debug("exited read loop")
 	}()
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -80,150 +61,64 @@ func (c *HubClient) readPump() {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
-
 	for {
 		mt, r, err := c.conn.NextReader()
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				c.hub.logger.Debug(fmt.Sprintf("expected close: %v", err))
 				return
-			}
 
+			}
 			if websocket.IsUnexpectedCloseError(err) {
-				log.Printf("unexpected close: %v", err)
+				c.hub.logger.Error(fmt.Sprintf("unexpected close: %v", err))
 				return
 			}
-
-			log.Printf("conn.ReadJsono: %v", err)
-
+			c.hub.logger.Error(fmt.Sprintf("NextReader: %v", err))
 			return
 		}
 
-		packet, err := c.decoder.Decode(r, mt)
+		packet, err := decodePacket(mt, r)
 		if err != nil {
-			log.Printf("decoder.Decode: %v", err)
+			c.hub.logger.Error(fmt.Sprintf("DecodePacket: %v", err))
 			continue
+
 		}
 
-		ctx := Request{
-			Payload:       packet.Payload,
-			Type:          packet.Type,
-			Context:       c.ctx,
-			CorrelationID: packet.CorrelationID,
-			Src:           c.id,
-		}
-
-		c.hub.Broadcast(&ctx)
-
+		ctx := NewContext(packet, c, c.hub, c.hub.baseCtx)
+		c.hub.request <- ctx
 	}
 
 }
 
-// The error is used to indicate if the connection must be closed forcefully.
-// If the error is nil, don't close the connection just yet
-// wait for the close message from the peer and close the connection in readPump.
-// Otherwise, close the connection immediately.
-func (c *HubClient) writePump() (err error) {
-	ticker := time.NewTicker(pingPeriod)
+func (c *Client) writeLoop() {
 	defer func() {
-		ticker.Stop()
-		if err != nil {
-			fmt.Printf("writePump close connection because: %v\n", err)
-			c.hub.Unregister(c)
-			c.conn.Close()
-		}
+		c.ticker.Stop()
+		c.conn.Close()
+		c.hub.wg.Done()
+		c.logger.Debug("exited write loop")
 	}()
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case packet, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// the hub has closed the channel
 				c.conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-
-				return nil
+					websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
+				return
 			}
-			w, err := c.conn.NextWriter(c.encoder.MessageType())
 
+			err := encodePacket(c.conn.NextWriter, packet)
 			if err != nil {
-				return fmt.Errorf("conn.NextWriter: %v", err)
+				c.hub.logger.Error(fmt.Sprintf("EncodePacket: %v", err))
 			}
-
-			c.encoder.Encode(w, &Packet{
-				Type:          message.Type,
-				Payload:       message.Payload,
-				CorrelationID: message.CorrelationID,
-			})
-
-			w.Close()
-
-		case <-ticker.C:
+		case <-c.ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			fmt.Printf("sending ping to %v\n", c.id)
-			err = c.conn.WriteMessage(websocket.PingMessage, nil)
-			if err != nil {
-				return err
-
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				c.hub.logger.Error(fmt.Sprintf("WritePing: %v", err))
+				return
 			}
+
 		}
 	}
-}
-
-type HubClientFactory struct {
-	hub Hub
-	// AuthAdapter is used to retrieve the client id
-	adapter AuthAdapter
-	// Context passwed to the client
-	// If the is nill the request context is used
-	baseCtx  context.Context
-	decoder  PacketDecoder
-	enconder PacketEncoder
-}
-
-func NewHubClientFactory(hub Hub, adapter AuthAdapter, baseCtx context.Context, encoder PacketEncoder, decoder PacketDecoder) *HubClientFactory {
-	return &HubClientFactory{
-		hub:      hub,
-		adapter:  adapter,
-		baseCtx:  baseCtx,
-		enconder: encoder,
-		decoder:  decoder,
-	}
-}
-
-func (f *HubClientFactory) HandleFunc(w http.ResponseWriter, r *http.Request) {
-	id, err := f.adapter.Authenticate(r)
-	if err != nil {
-		fmt.Printf("error: %v", err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("upgrade: %v", err)
-		return
-	}
-
-	var ctx context.Context
-	if f.baseCtx != nil {
-		ctx = f.baseCtx
-	} else {
-		ctx = r.Context()
-	}
-
-	client := &HubClient{
-		ctx:     ctx,
-		hub:     f.hub,
-		conn:    conn,
-		send:    make(chan *Response),
-		id:      id,
-		encoder: f.enconder,
-		decoder: f.decoder,
-	}
-
-	f.hub.Register(client)
-
-	go client.writePump()
-	go client.readPump()
-
 }

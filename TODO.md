@@ -14,7 +14,7 @@
 
 - [ ] Impose rate limit on the server
 
-- [ ] Implement graceful shotdown for server.
+- [x] Implement graceful shotdown for server.
 
   - the the websocket connection is not shutdown automatically when calling server.Shotdown
     because the connection has ben hijacked by the websocket handler.
@@ -24,19 +24,20 @@
 
 - [ ] Impose a timeout to each operation in the hub via context
 
-- [ ] Make the hub only responsible for routing messages.
+- [x] Make the hub only responsible for routing messages.
   - move all the message parsing to the client. It is the client's responsible to ensure the incoming packs are valid
   - move all the database operations from the hub. The hub should spawn a new go routine to handle the database operations.
     Once these database operations is done send back the response to the hub via a channel and the hub will broadcast the response to the clients.
 
 ## API
 
-- [ ] sign in should also return the user so that it can be used to populate the client state
+- [x] sign in should also return the user so that it can be used to populate the client state
 
 ## Chat Store
 
-- [ ] Add read interaction for sender when sending a message
-- [ ] Implement pagination for messages, rooms
+- [x] Add read interaction for sender when sending a message
+- [x] Implement pagination for messages, rooms
+- [x] Implement pagination for room summaries
 
 ## Frontend
 
