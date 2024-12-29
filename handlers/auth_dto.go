@@ -13,7 +13,7 @@ type SigninPayload struct {
 
 type SigninResponse struct {
 	Token    string                     `json:"token"`
-	ExpireAt time.Time                  `json:"expireAt"`
+	ExpireAt time.Time                  `json:"expire_at"`
 	User     *models.UserWithoutSecrets `json:"user"`
 }
 

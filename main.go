@@ -140,6 +140,7 @@ func main() {
 	api := router.New(router.WithLogger(logger))
 
 	api.Post("/signin", authHandler.SigninHandler)
+	api.Post("/signout", authHandler.SignoutHandler)
 	api.Post("/signup", userHandler.CreateUserHandler)
 
 	api.Route("/users", func(r *router.Router) {

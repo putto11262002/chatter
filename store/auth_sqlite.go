@@ -105,7 +105,11 @@ func (a *SQLiteAuthStore) isBlacklisted(ctx context.Context, token string) (bool
 }
 
 func (a *SQLiteAuthStore) Session(ctx context.Context, t string) (session *models.Session, err error) {
-	claims, err := token.Verify(t, a.secret)
+	payload := &models.UserWithoutSecrets{}
+	claims := token.AuthClaims{
+		Payload: payload,
+	}
+	err = token.Verify(t, &claims, a.secret)
 	if err != nil {
 		if errors.Is(err, token.ErrTokenExpired) || errors.Is(err, token.ErrTokenInvalid) {
 			return nil, ErrUnauthenticated
@@ -122,13 +126,8 @@ func (a *SQLiteAuthStore) Session(ctx context.Context, t string) (session *model
 		return nil, ErrUnauthenticated
 	}
 
-	p, ok := claims.Payload.(models.UserWithoutSecrets)
-	if !ok {
-		return nil, errors.New("invalid token payload")
-	}
-
 	session = &models.Session{
-		Username: p.Username,
+		Username: payload.Username,
 		Token:    t,
 	}
 

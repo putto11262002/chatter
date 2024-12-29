@@ -41,8 +41,7 @@ func New(payload interface{}, expiration time.Duration, secret []byte) (string, 
 	return signed, exp, err
 }
 
-func Verify(token string, secret []byte) (*AuthClaims, error) {
-	claims := &AuthClaims{}
+func Verify(token string, claims *AuthClaims, secret []byte) error {
 
 	_token, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
 		return secret, nil
@@ -50,14 +49,14 @@ func Verify(token string, secret []byte) (*AuthClaims, error) {
 
 	switch {
 	case _token.Valid:
-		return claims, nil
+		return nil
 	case errors.Is(err, jwt.ErrTokenMalformed):
-		return nil, ErrTokenInvalid
+		return ErrTokenInvalid
 	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
-		return nil, ErrTokenInvalid
+		return ErrTokenInvalid
 	case errors.Is(err, jwt.ErrTokenExpired):
-		return nil, ErrTokenExpired
+		return ErrTokenExpired
 	default:
-		return nil, ErrUnrecognizedToken
+		return ErrUnrecognizedToken
 	}
 }

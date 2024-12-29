@@ -96,8 +96,9 @@ func (a *Router) handleWithErr(h HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			handlerFn := runtime.FuncForPC(reflect.ValueOf(h).Pointer())
 			a.logger.Error(err.Error(), slog.String("handler", handlerFn.Name()))
-			merr := a.mapError(err)
-			if err := json.NewEncoder(w).Encode(merr); err != nil {
+			resError := a.mapError(err)
+			w.WriteHeader(resError.StatusCode())
+			if err := json.NewEncoder(w).Encode(resError); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
