@@ -20,24 +20,28 @@ var (
 	ErrInvalidMessage = errors.New("invalid message")
 	// ErrInvalidMessageType is returned when the type of the message is not supported.
 	ErrInvalidMessageType = errors.New("invalid message type")
+	// ErrInsufficientUsers is returned when insufficient users are provided to create a room.
+	ErrInsufficientUsers   = errors.New("insufficient users")
+	ErrDisAllowedOperation = errors.New("disallowed operation")
+	ErrInvalidMember       = errors.New("invalid member")
 )
 
 var validate = validator.New()
 
 type ChatStore interface {
-	// CreatePrivateChat create a private room between two users.
-	// If a private room between the two users already exists, it should return ErrConflictedRoom.
-	// If one of the users does not exist, it returns ErrInvalidUser.
-	// If the two users are the same, it returns ErrInvalidUser.
-	// If the error is nil, it returns the ID of the created room.
-	CreatePrivateChat(ctx context.Context, users [2]string) (string, error)
 
-	// CreateGroupChat creates a group chat room with the given name and users.
+	// CreateRoom creates a chat room with the given name and users.
 	// If the one of the users does not exist, it returns ErrInvalidUser.
 	// If the number of users is less than 2, it returns ErrInvalidUser.
 	// If there are duplicate users, it is deduplicated.
 	// If the error is nil, it returns the ID of the created room.
-	CreateGroupChat(ctx context.Context, name string, users ...string) (string, error)
+	CreateRoom(ctx context.Context, name, owner string) (string, error)
+
+	AddRoomMember(ctx context.Context, roomID string, user string, role models.MemberRole) error
+
+	RemoveRoomMember(ctx context.Context, roomID string, user string) error
+
+	GetUserRooms(ctx context.Context, user string, offset, litmit int) ([]models.Room, error)
 
 	// GetRoomByID returns the room with the given ID.
 	// If the room is not found, it returns nil.
@@ -59,13 +63,13 @@ type ChatStore interface {
 	// has read all previous messages in the room.
 	SendMessageToRoom(ctx context.Context, message MessageCreateInput) (*models.Message, error)
 
-	// GetRoomMessages returns a list of messages in the room.
+	// GetRoomMessages returns a list of messages in the room ordered in descending order of sent_at.
 	// Reading offset and limit can be specified to paginate the results.
 	// If the limit is a zero value, the limit is set to 100.
 	GetRoomMessages(ctx context.Context, roomID string, offset, limit int) ([]models.Message, error)
 
-	// IsRoomMember returns true if the user is a member of the room.
-	IsRoomMember(ctx context.Context, roomID, user string) (bool, error)
+	// IsRoomMember returns true and the role of that membert if the user is a member of the room.
+	IsRoomMember(ctx context.Context, roomID, user string) (bool, models.MemberRole, error)
 
 	// ReadRoomMessages marks the messages in the room as read up to a message.
 	// It returns the message ID of the last message read and the time the messages were read.
@@ -86,7 +90,7 @@ type MessageCreateInput struct {
 	Type   models.MessageType `json:"type" validate:"required"`
 	Data   string             `json:"data" validate:"required"`
 	Sender string             `json:"sender" validate:"required"`
-	RoomID string             `json:"roomID" validate:"required"`
+	RoomID string             `json:"room_id" validate:"required"`
 }
 
 // Validate validates the message input.

@@ -5,7 +5,7 @@ type WSOptions = {
   onPacketReceived: (packet: Packet) => void;
 };
 
-type Packet = {
+export type Packet = {
   type: string;
   id?: number;
   body?: unknown;
@@ -60,7 +60,7 @@ export class WS {
     if (this.readyState !== ReadyState.Closed) {
       return;
     }
-    this.conn = new WebSocket("ws://localhost:8080/ws/?id=1234");
+    this.conn = new WebSocket("ws://localhost:8080/ws");
     this.readyState = ReadyState.Connecting;
 
     this.conn.addEventListener("open", () => {

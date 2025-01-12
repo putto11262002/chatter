@@ -1,35 +1,35 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { MessageType } from "@/types/chat";
 import { Send } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
-import { useWS } from "@/hooks/ws-provider";
-import {  useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { Textarea } from "../ui/textarea";
+import { useChat } from "../context/chat/provider";
+import { MessageType } from "@/lib/types/chat";
 
 export default function ChatMessageInput({ roomID }: { roomID: string }) {
-  const { sendMessage, emitTypingEvent } = useWS();
-  const timeRef = useRef<Timer>(null);
+  const timeRef = useRef<Timer | null>(null);
   const form = useForm();
   const message = form.watch("message");
   const [typing, setTyping] = useState(false);
+  const { sendMessage } = useChat();
 
   const handleInput = () => {
     if (timeRef.current) {
       clearTimeout(timeRef.current);
     }
-    setTyping(true);
-    if (!typing) {
-      emitTypingEvent(roomID, true);
-    }
-    timeRef.current = setTimeout(() => {
-      setTyping(false);
-      emitTypingEvent(roomID, false);
-    }, 1000);
+    // setTyping(true);
+    // if (!typing) {
+    //   emitTypingEvent(roomID, true);
+    // }
+    // timeRef.current = setTimeout(() => {
+    //   setTyping(false);
+    //   emitTypingEvent(roomID, false);
+    // }, 1000);
   };
 
   const onSumit = (data: string) => {
-    sendMessage(roomID, MessageType.TEXT, data);
+    sendMessage({ data: data, type: MessageType.Text, room_id: roomID });
     form.reset();
   };
 
@@ -41,7 +41,8 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
         )}
         className="flex py-2 px-2 gap-2 border-t"
       >
-        <Input
+        <Textarea
+          rows={1}
           onInput={handleInput}
           className="grow"
           {...form.register("message")}

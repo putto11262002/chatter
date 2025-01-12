@@ -11,16 +11,16 @@ CREATE TABLE blacklists  (
 
 CREATE TABLE rooms (
     id TEXT PRIMARY KEY,
-    type INTEGER NOT NULL,
+    name TEXT NOT NULL,
     last_message_sent_at TIMESTAMP NOT NULL,
-    last_message_sent INTEGER NOT NULL DEFAULT -1
+    last_message_sent INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE room_members (
 	room_id TEXT NOT NULL,
 	username TEXT NOT NULL,
-	room_name TEXT NOT NULL,
-	last_message_read INTEGER NOT NULL DEFAULT -1,
+	last_message_read INTEGER NOT NULL DEFAULT 0,
+	role TEXT NOT NULL,
 	PRIMARY KEY (room_id, username),
 	FOREIGN KEY (room_id) REFERENCES rooms(id),
 	FOREIGN KEY (username) REFERENCES users(username),
@@ -54,3 +54,6 @@ DROP TABLE room_members;
 DROP TABLE rooms;
 DROP TABLE users
 DROP TABLE blacklists;
+
+
+

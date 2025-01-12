@@ -10,13 +10,17 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { CheckCircle, CircleHelp, Loader2, PlusCircle } from "lucide-react";
+import { CheckCircle, CircleHelp, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useGetUserByUsername } from "@/hooks/users";
 import { useCreatePrivateChat } from "@/hooks/chats";
 import Alert from "./alert";
 
-export default function CreatePrivateChatDialog() {
+export default function CreatePrivateChatDialog({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [username, setUsername] = useState("");
   const { data, error, isLoading } = useGetUserByUsername(username);
   const {
@@ -27,11 +31,7 @@ export default function CreatePrivateChatDialog() {
   const valid = Boolean(data && !isLoading);
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Button size="icon" variant="outline">
-          <PlusCircle className="w-3.5 h-3.5" />
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create private chat</DialogTitle>

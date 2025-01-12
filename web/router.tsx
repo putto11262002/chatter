@@ -3,13 +3,20 @@ import Signup from "./pages/signup";
 import Signin from "./pages/signin";
 import SessionProvider from "./components/providers/session-provider";
 import { SWRConfig } from "swr";
-import { apiErrorMiddleware, sessionMiddleware } from "./hooks/swr-middlewares";
-import { ChatProvider } from "./hooks/chat/provider";
+import { ChatProvider } from "@/components/context/chat/provider";
+import { clearSesssionOnAuthError } from "./lib/swr/middlewares";
+import ChatPage from "./pages/chat";
 
 export const router = createBrowserRouter([
   {
     element: (
-      <SWRConfig value={{ use: [apiErrorMiddleware] }}>
+      <SWRConfig
+        value={{
+          revalidateOnMount: true,
+          revalidateIfStale: false,
+          refreshInterval: 1000 * 60 * 5,
+        }}
+      >
         <Outlet />
       </SWRConfig>
     ),
@@ -27,20 +34,17 @@ export const router = createBrowserRouter([
         children: [
           {
             element: (
-              <SWRConfig value={{ use: [sessionMiddleware] }}>
-                <Outlet />
+              <SWRConfig value={{ use: [clearSesssionOnAuthError] }}>
+                <ChatProvider>
+                  <Outlet />
+                </ChatProvider>
               </SWRConfig>
             ),
 
             children: [
               {
-                element: <ChatProvider />,
-                children: [
-                  {
-                    path: "/",
-                    element: <div>Hi there</div>,
-                  },
-                ],
+                path: "/:roomID?",
+                element: <ChatPage />,
               },
             ],
           },

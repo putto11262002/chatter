@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Message as _Message, MessageType } from "@/types/chat";
+import { Message as _Message, MessageType } from "@/lib/types/chat";
 export default function Message({
   message,
   className,
@@ -7,7 +7,7 @@ export default function Message({
   message: _Message;
   className?: string;
 }) {
-  if (message.type === MessageType.TEXT) {
+  if (message.type === MessageType.Text) {
     return (
       <div className={cn("px-3 py-2 rounded-lg border", className)}>
         {message.data}

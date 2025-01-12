@@ -10,13 +10,7 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import {
-  CircleHelp,
-  CirclePlus,
-  Loader2,
-  MessageCirclePlus,
-  X,
-} from "lucide-react";
+import { CircleHelp, CirclePlus, Loader2, MailPlus, X } from "lucide-react";
 import { useState } from "react";
 import { useGetUserByUsername } from "@/hooks/users";
 import Alert from "./alert";
@@ -57,7 +51,7 @@ export default function CreateGroupChatDialog() {
   const handleSubmit = form.handleSubmit((values) => {
     trigger({
       name: values.name,
-      users: values.users.map((user) => user.username),
+      members: values.users.map((user) => user.username),
     });
   });
 
@@ -65,7 +59,7 @@ export default function CreateGroupChatDialog() {
     <Dialog>
       <DialogTrigger asChild>
         <Button size="icon" variant="outline">
-          <MessageCirclePlus className="w-3.5 h-3.5" />
+          <MailPlus className="w-4 h-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>

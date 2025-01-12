@@ -40,6 +40,7 @@ type Client struct {
 
 func NewClient(hub *Hub, conn *websocket.Conn, logger *slog.Logger, id string) *Client {
 	return &Client{
+		ID:     id,
 		send:   make(chan *Packet),
 		ticker: time.NewTicker(pingPeriod),
 		conn:   conn,
@@ -50,7 +51,10 @@ func NewClient(hub *Hub, conn *websocket.Conn, logger *slog.Logger, id string) *
 
 func (c *Client) readLoop() {
 	defer func() {
-		c.hub.disconnectChan <- c
+		select {
+		case c.hub.disconnectChan <- c:
+		default:
+		}
 		c.conn.Close()
 		c.hub.wg.Done()
 		c.logger.Debug("exited read loop")

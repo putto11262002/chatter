@@ -130,7 +130,7 @@ func (a *Router) Route(path string, f func(r *Router)) {
 
 func (a *Router) Group(f func(r *Router)) *Router {
 	ch := a.Router.Group(func(r chi.Router) {
-		f(&Router{Router: r})
+		f(new(r))
 	})
 	return new(ch)
 }

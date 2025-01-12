@@ -21,6 +21,7 @@ import (
 	"github.com/putto11262002/chatter/pkg/server"
 	"github.com/putto11262002/chatter/pkg/ws"
 	"github.com/putto11262002/chatter/store"
+	"github.com/putto11262002/chatter/ws"
 )
 
 // port
@@ -124,7 +125,14 @@ func main() {
 	hub := hub.New(
 		hub.WithLogger(logger),
 		hub.WithBaseContext(ctx),
+		hub.WithAuthenticator(&ws.Authenticator{}),
 	)
+
+	chatWSHandler := ws.NewChatWSHandler(chatStore)
+	hub.SetHandle(ws.Message, chatWSHandler.MessageHandler)
+	hub.SetHandle(ws.ReadMessage, chatWSHandler.ReadMessage)
+	hub.SetHandle(ws.Typing, chatWSHandler.TypingHandler)
+
 	hub.Start()
 
 	r := router.New()
@@ -135,12 +143,13 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	r.Router.Get("/ws", hub.ServeHTTP)
+	r.With(handlers.JWTMiddleware(authStore)).
+		Router.Get("/ws", hub.ServeHTTP)
 
 	api := router.New(router.WithLogger(logger))
 
 	api.Post("/signin", authHandler.SigninHandler)
-	api.Post("/signout", authHandler.SignoutHandler)
+	api.With(handlers.JWTMiddleware(authStore)).Post("/signout", authHandler.SignoutHandler)
 	api.Post("/signup", userHandler.CreateUserHandler)
 
 	api.Route("/users", func(r *router.Router) {
@@ -150,11 +159,12 @@ func main() {
 
 	api.Group(func(r *router.Router) {
 		r.Use(handlers.JWTMiddleware(authStore))
-		r.Get("/user/me/rooms", chatHandler.GetMyRoomSummaries)
-		r.Get("/rooms/:roomID", chatHandler.GetRoomByIDHandler)
+		r.Get("/users/me/rooms", chatHandler.GetMyRoomSummaries)
+		r.Get("/rooms/{roomID}", chatHandler.GetRoomByIDHandler)
 		r.Post("/rooms/private", chatHandler.CreatePrivateChatHandler)
 		r.Post("/rooms/group", chatHandler.CreateGroupChatHandler)
-		r.Get("/rooms/:roomID/messages", chatHandler.GetRoomMessagesHandler)
+		r.Get("/rooms/{roomID}/messages", chatHandler.GetRoomMessagesHandler)
+		r.Post("/rooms/messages", chatHandler.SendMessageHandler)
 	})
 
 	r.Mount("/api", api)

@@ -8,16 +8,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { UserSignupRequest, UserSignupRequestSchema } from "@/types/user";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Alert from "@/components/alert";
 import { Link, useNavigate } from "react-router-dom";
 import { useSignup } from "@/hooks/users";
+import { CreateUserPayload, createUserPayloadSchema } from "@/lib/types/user";
 
 export default function Signup() {
-  const form = useForm<UserSignupRequest>({
-    resolver: zodResolver(UserSignupRequestSchema),
+  const form = useForm<CreateUserPayload>({
+    resolver: zodResolver(createUserPayloadSchema),
   });
   const navigate = useNavigate();
 

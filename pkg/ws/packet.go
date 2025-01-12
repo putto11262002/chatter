@@ -18,7 +18,7 @@ type Packet struct {
 }
 
 func decodePacket(t int, r io.Reader) (*Packet, error) {
-	if t == websocket.TextMessage {
+	if t != websocket.TextMessage {
 		return nil, fmt.Errorf("unexpected message type: %d", t)
 	}
 

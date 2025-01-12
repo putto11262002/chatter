@@ -27,20 +27,28 @@ type ChatType = int
 // It is used to determine how the message data should be interpreted.
 type MessageType = int
 
+type MemberRole string
+
+const (
+	Owner  MemberRole = "owner"
+	Admin  MemberRole = "admin"
+	Member MemberRole = "member"
+)
+
 // RoomUser represents a user in a chat room.
 // It is used to store additional information about the room that is specific to the user.
 type RoomMember struct {
-	Username        string `json:"username"`
-	RoomID          string `json:"room_id"`
-	RoomName        string `json:"room_name"`
-	LastMessageRead int    `json:"last_message_read"`
+	Role            MemberRole `json:"role"`
+	Username        string     `json:"username"`
+	RoomID          string     `json:"room_id"`
+	LastMessageRead int        `json:"last_message_read"`
 }
 
 // Room represents a chat room.
 type Room struct {
 	ID                string       `json:"id"`
 	Members           []RoomMember `json:"users"`
-	Type              ChatType     `json:"type"`
+	Name              string       `json:"name"`
 	LastMessageSentAt time.Time    `json:"last_message_sent_at"`
 	LastMessageSent   int          `json:"last_message_sent"`
 }

@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/putto11262002/chatter/pkg/router"
 	"github.com/putto11262002/chatter/store"
 )
 
@@ -31,6 +33,9 @@ func (h *AuthHandler) SigninHandler(w http.ResponseWriter, r *http.Request) erro
 	token, exp, user, err := h.store.NewSession(r.Context(), payload.Username, payload.Password)
 
 	if err != nil {
+		if errors.Is(err, store.ErrBadCredentials) {
+			return router.NewJsonError(http.StatusUnauthorized, err.Error())
+		}
 		return err
 	}
 
@@ -62,5 +67,6 @@ func (h *AuthHandler) SignoutHandler(w http.ResponseWriter, r *http.Request) err
 		HttpOnly: true,
 		Path:     "/",
 	})
+	w.WriteHeader(http.StatusOK)
 	return nil
 }

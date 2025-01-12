@@ -1,7 +1,7 @@
 import { useMe } from "@/hooks/users";
-import { Session } from "@/types/user";
+import { Session } from "@/lib/types/auth";
 import React, { useEffect } from "react";
-import { Outlet, useNavigate, useNavigation } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 
 const sessionContext = React.createContext<Session>({ username: "", name: "" });
 

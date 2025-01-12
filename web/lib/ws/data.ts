@@ -1,4 +1,4 @@
-import { MessageType } from "@/types/chat";
+import { MessageType } from "@/lib/types/chat";
 import { z } from "zod";
 
 export enum PacketType {
@@ -10,7 +10,7 @@ export enum PacketType {
 }
 
 // Define schemas for each payload type
-export const MessageBody = z.object({
+export const messageBodySchema = z.object({
   id: z.number(),
   room_id: z.string(),
   data: z.string(),
@@ -19,15 +19,21 @@ export const MessageBody = z.object({
   sent_at: z.string(),
 });
 
-export const ReadMessageBody = z.object({
+export type MessageBody = z.infer<typeof messageBodySchema>;
+
+export const readMessageBodySchema = z.object({
   room_id: z.string(),
   message_id: z.number(),
   read_at: z.string(),
   last_read_message: z.number(),
 });
 
-export const TypingBody = z.object({
+export type ReadMessageBody = z.infer<typeof readMessageBodySchema>;
+
+export const typingBodySchema = z.object({
   typing: z.boolean(),
   username: z.string(),
   room_id: z.string(),
 });
+
+export type TypingBody = z.infer<typeof typingBodySchema>;

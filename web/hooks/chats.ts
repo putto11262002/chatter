@@ -1,20 +1,20 @@
 import useSWRMutation from "swr/mutation";
 import {
-  CreatePrivateChatRequest,
+  CreatePrivateChatPayload,
   CreateChatResponse,
   Message,
   Room,
-  CreateGroupChatRequest,
-  RoomView,
-} from "@/types/chat";
-import { api } from "@/api";
+  CreateGroupChatPayload,
+} from "@/lib/types/chat";
+import { api } from "@/lib/api";
 import useSWR, { useSWRConfig } from "swr";
+import { RoomSummary } from "@/lib/types/chat";
 
 export const useCreatePrivateChat = () => {
   const { mutate } = useSWRConfig();
   return useSWRMutation(
     "/api/rooms/private",
-    async (url, { arg }: { arg: CreatePrivateChatRequest }) => {
+    async (url, { arg }: { arg: CreatePrivateChatPayload }) => {
       const res = await api.post(url, arg);
       return res.data as CreateChatResponse;
     },
@@ -28,7 +28,7 @@ export const useCreateGroupChat = () => {
   const { mutate } = useSWRConfig();
   return useSWRMutation(
     "/api/rooms/group",
-    async (url, { arg }: { arg: CreateGroupChatRequest }) => {
+    async (url, { arg }: { arg: CreateGroupChatPayload }) => {
       const res = await api.post(url, arg);
       return res.data as CreateChatResponse;
     },
@@ -54,28 +54,10 @@ export const useMyRooms = () => {
     "/api/users/me/rooms",
     async (url) => {
       const res = await api.get(url);
-      return res.data as RoomView[];
+      return res.data as RoomSummary[];
     },
     {}
   );
-};
-
-export const useReceiveMessage = () => {
-  const { mutate } = useSWRConfig();
-  return {
-    trigger: (message: Message) => {
-      mutate(
-        `/api/chats/rooms/${message.roomID}/messages`,
-        async (currentMessages: Message[] | undefined) => [
-          message,
-          ...(currentMessages ? currentMessages : []),
-        ],
-        {
-          revalidate: false,
-        }
-      );
-    },
-  };
 };
 
 export const useChatMessageHistory = (roomID?: string) => {
@@ -84,6 +66,9 @@ export const useChatMessageHistory = (roomID?: string) => {
     async (url) => {
       const res = await api.get(url);
       return res.data as Message[];
+    },
+    {
+      refreshInterval: 1000 * 60 * 5, // 5 minutes
     }
   );
 };

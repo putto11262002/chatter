@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 type Hub struct {
@@ -64,6 +65,12 @@ func WithBaseContext(ctx context.Context) HubOption {
 	}
 }
 
+func WithAuthenticator(auth Authenticator) HubOption {
+	return func(h *Hub) {
+		h.authenticator = auth
+	}
+}
+
 func (hub *Hub) Start() {
 	hub.wg.Add(1)
 	go hub.start()
@@ -80,11 +87,11 @@ func (hub *Hub) start() {
 		select {
 		case <-hub.exit:
 			return
-		case c := <-hub.connectChan:
-			hub.clients[c.ID] = c
-			c.logger.Debug("connected")
+		case newC := <-hub.connectChan:
+			hub.clients[newC.ID] = newC
+			newC.logger.Debug("connected")
 			if hub.connectHandler != nil {
-				hub.connectHandler(hub, c)
+				hub.connectHandler(hub, newC)
 			}
 		case c := <-hub.disconnectChan:
 			hub.disconnect(c)
@@ -92,12 +99,22 @@ func (hub *Hub) start() {
 			h, ok := hub.handlers[ctx.Packet.Type]
 			if !ok {
 				ctx.Sender.logger.Error(fmt.Sprintf("handler(%s): not found", ctx.Packet.Type))
+				continue
 			}
-			err := h(ctx)
-			if err != nil {
-				ctx.Sender.logger.Error(
-					fmt.Sprintf("handler(%s): %v", ctx.Packet.Type, err))
-			}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						ctx.Sender.logger.Error("handler(%s): %v", ctx.Packet.Type, r)
+
+					}
+
+				}()
+				err := h(ctx)
+				if err != nil {
+					ctx.Sender.logger.Error(
+						fmt.Sprintf("handler(%s): %v", ctx.Packet.Type, err))
+				}
+			}()
 		}
 
 	}
@@ -141,6 +158,24 @@ func (hub *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (hub *Hub) Wait() {
 	hub.logger.Debug("waiting for hub to close")
 	hub.wg.Wait()
+	hub.logger.Debug("hub closed")
+}
+
+func (hub *Hub) WaitWithTimeout(timeout time.Duration) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	done := make(chan struct{})
+	go func() {
+		hub.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-timer.C:
+		hub.logger.Debug("hub closed with timeout")
+	case <-done:
+		hub.logger.Debug("hub closed gracefully")
+	}
 }
 
 func (hub *Hub) SetHandle(t string, h Handler) {

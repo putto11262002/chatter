@@ -144,3 +144,21 @@ func (h *ChatHandler) GetRoomMessagesHandler(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(messages)
 	return nil
 }
+
+func (h *ChatHandler) SendMessageHandler(w http.ResponseWriter, r *http.Request) error {
+	var payload store.MessageCreateInput
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return err
+	}
+	r.Body.Close()
+	message, err := h.chatStore.SendMessageToRoom(r.Context(), payload)
+	if err != nil {
+		if err == store.ErrInvalidRoom || err == store.ErrInvalidMessageType || err == store.ErrInvalidMessage {
+			return router.NewJsonError(http.StatusBadRequest, err.Error())
+		}
+		return err
+	}
+
+	json.NewEncoder(w).Encode(message)
+	return nil
+}
