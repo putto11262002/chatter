@@ -297,6 +297,9 @@ func Test_pass(t *testing.T) {
 	require.True(t, ok, "timeout waiting for all packets to be received")
 
 	assert.ElementsMatch(t, sent, received)
+	for _, p := range received {
+		assert.NotNil(t, p.context)
+	}
 }
 
 func Test_sendOrDisconnect(t *testing.T) {
