@@ -1,19 +1,25 @@
 package ws
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+)
 
-type PacketHandler func(HubActions, *InPacket) error
+type PacketHandler func(HubActions, *Packet) error
 
 type Router struct {
-	hub      *ConnHub
+	hub      Hub
 	handlers map[string]PacketHandler
+	logger   *slog.Logger
 }
 
-func NewRouter(hub *ConnHub) *Router {
-	return &Router{
+func NewRouter(hub Hub) *Router {
+	r := &Router{
 		hub:      hub,
 		handlers: make(map[string]PacketHandler),
 	}
+	hub.OnPacket(r.Dispatch)
+	return r
 }
 
 func (hub *Router) On(packetType string, h PacketHandler) {
@@ -23,22 +29,22 @@ func (hub *Router) On(packetType string, h PacketHandler) {
 	hub.handlers[packetType] = h
 }
 
-func (r Router) Dispatch(packet *InPacket) {
+func (r Router) Dispatch(actions HubActions, packet *Packet) {
 	h, ok := r.handlers[packet.Type]
 	if !ok {
-		r.hub.logger.Error(fmt.Sprintf("handler for %s not found", packet.Type))
+		r.logger.Error(fmt.Sprintf("handler for %s not found", packet.Type))
 		return
 	}
 	func() {
 		defer func() {
 			if _r := recover(); _r != nil {
-				r.hub.logger.Error("handler(%s): %v", packet.Type, _r)
+				r.logger.Error("handler(%s): %v", packet.Type, _r)
 			}
 
 		}()
 		err := h(r.hub, packet)
 		if err != nil {
-			r.hub.logger.Error(
+			r.logger.Error(
 				fmt.Sprintf("handler(%s): %v", packet.Type, err))
 		}
 	}()

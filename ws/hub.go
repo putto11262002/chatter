@@ -6,9 +6,18 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+type HubState int
+
+const (
+	StateClosed HubState = iota
+	StateClosing
+	StateRunning
 )
 
 type ConnHub struct {
@@ -18,30 +27,34 @@ type ConnHub struct {
 
 	disconnectChan chan Conn
 	// in is used to send incoming packets to the manager
-	in chan *InPacket
+	in chan *Packet
 	// exit is used to signal that the manager should stop accepting new connections and exit
 	exit chan struct{}
 
 	logger *slog.Logger
 
-	OnConnect func(HubActions, Conn) error
+	onConnect func(HubActions, Conn)
 
-	OnDisconnect func(HubActions, Conn) error
+	onDisconnect func(HubActions, Conn)
 
 	baseCtx context.Context
 
 	wg sync.WaitGroup
 
-	OnPacketIn func(*InPacket)
+	onPacket func(HubActions, *Packet)
 
 	connFactory ConnFactory
 
 	authenticator Authenticator
 
 	closeTimeout time.Duration
-
+	// ready indicates whether the hub is ready to accept new connections.
+	// Passing packets to the hub when the hub is not ready will block.
 	ready atomic.Bool
-	mu    sync.Mutex
+	// close indicates whether the hub is closed.
+	// The hub is considered close when the main goroutine is stopped.
+	state HubState
+	mu    sync.RWMutex
 }
 
 func New(cf ConnFactory, a Authenticator, opts ...HubOption) *ConnHub {
@@ -49,14 +62,15 @@ func New(cf ConnFactory, a Authenticator, opts ...HubOption) *ConnHub {
 		conns:          make(map[string][]Conn),
 		connectChan:    make(chan Conn),
 		disconnectChan: make(chan Conn),
-		in:             make(chan *InPacket),
+		in:             make(chan *Packet),
 		exit:           make(chan struct{}),
-		logger: slog.New(slog.NewJSONHandler(os.Stdout,
-			&slog.HandlerOptions{Level: slog.LevelDebug})),
+		logger: slog.New(slog.NewTextHandler(os.Stdout,
+			&slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true})),
 		baseCtx:       context.TODO(),
 		closeTimeout:  time.Second * 10,
 		authenticator: a,
 		connFactory:   cf,
+		state:         StateClosed,
 	}
 
 	for _, opt := range opts {
@@ -93,28 +107,43 @@ func (hub *ConnHub) Start() {
 }
 
 func (hub *ConnHub) start() {
-	hub.ready.Store(true)
-	defer hub.ready.Store(false)
+	hub.mu.Lock()
+	hub.state = StateRunning
+	hub.mu.Unlock()
+	defer func() {
+		hub.mu.Lock()
+		hub.state = StateClosed
+		hub.mu.Unlock()
+	}()
 	for {
 
 		select {
 		case <-hub.exit:
 			return
 		case newC := <-hub.connectChan:
-			hub.mu.Lock()
-			hub.addConn(newC)
-			hub.mu.Unlock()
+			hub.connect(newC)
 		case c := <-hub.disconnectChan:
-			hub.mu.Lock()
-			hub.removeConn(c)
-			hub.mu.Unlock()
+			hub.disconnect(c)
 		case packetIn := <-hub.in:
-			if hub.OnPacketIn != nil {
-				hub.OnPacketIn(packetIn)
+			packetIn.context = hub.baseCtx
+			if hub.onPacket != nil {
+				hub.onPacket(hub, packetIn)
 			}
 		}
 
 	}
+}
+
+func (hub *ConnHub) OnPacket(f func(HubActions, *Packet)) {
+	hub.onPacket = f
+}
+
+func (hub *ConnHub) OnConnect(f func(HubActions, Conn)) {
+	hub.onConnect = f
+}
+
+func (hub *ConnHub) OnDisconnect(f func(HubActions, Conn)) {
+	hub.onDisconnect = f
 }
 
 // Close start closing the hub.
@@ -124,13 +153,17 @@ func (hub *ConnHub) start() {
 //  2. Signal the hub main goroutine to exit.
 func (hub *ConnHub) Close() {
 	hub.logger.Info("closing connections...")
+	if hub.state != StateRunning {
+		return
+	}
 	hub.mu.Lock()
+	hub.state = StateClosing
+	hub.mu.Unlock()
 	for _, conns := range hub.conns {
-		for _, conn := range conns {
-			hub.removeConn(conn)
+		for i := len(conns) - 1; i >= 0; i-- {
+			hub.disconnect((conns)[i])
 		}
 	}
-	hub.mu.Unlock()
 	hub.logger.Info("exiting hub...")
 	close(hub.exit)
 	timer := time.NewTimer(hub.closeTimeout)
@@ -159,10 +192,10 @@ func (hub *ConnHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	hub.handleConn(conn)
+	hub.Connect(conn)
 }
 
-func (hub *ConnHub) handleConn(conn Conn) {
+func (hub *ConnHub) startConn(conn Conn) {
 	hub.wg.Add(1)
 	go func() {
 		defer hub.wg.Done()
@@ -174,12 +207,11 @@ func (hub *ConnHub) handleConn(conn Conn) {
 		defer hub.wg.Done()
 		conn.writeLoop()
 	}()
-	hub.connect(conn)
 }
 
 // sendOrDisconnect sends a response message to a client. If the send channel of the
 // client is blocked, it disconnects the client.
-func (hub *ConnHub) sendOrDisconnect(c Conn, p *OutPacket) {
+func (hub *ConnHub) sendOrDisconnect(c Conn, p *Packet) {
 	select {
 	case c.pass() <- p:
 	default:
@@ -187,40 +219,67 @@ func (hub *ConnHub) sendOrDisconnect(c Conn, p *OutPacket) {
 	}
 }
 
-func (hub *ConnHub) connect(c Conn) {
+func (hub *ConnHub) Connect(c Conn) {
 	hub.connectChan <- c
 }
 
-func (hub *ConnHub) disconnect(c Conn) {
+func (hub *ConnHub) Disconnect(c Conn) {
 	hub.disconnectChan <- c
 }
 
-func (hub *ConnHub) pass(packet *InPacket) {
+func (hub *ConnHub) pass(packet *Packet) {
 	hub.in <- packet
 }
 
-func (hub *ConnHub) removeConn(c Conn) {
-	_, ok := hub.conns[c.ID()]
-	if !ok {
-		return
-	}
-	delete(hub.conns, c.ID())
-	c.close()
-
-	if hub.OnDisconnect != nil {
-		hub.OnDisconnect(hub, c)
+func (hub *ConnHub) connect(c Conn) {
+	hub.startConn(c)
+	hub.mu.Lock()
+	hub.addConn(c)
+	hub.mu.Unlock()
+	hub.logger.Info("new connection", slog.String("id", c.ID()))
+	if hub.onConnect != nil {
+		hub.onConnect(hub, c)
 	}
 }
 
+func (hub *ConnHub) disconnect(c Conn) {
+	hub.mu.Lock()
+	ok := hub.removeConn(c)
+	hub.mu.Unlock()
+	if !ok {
+		return
+	}
+	c.close()
+	if hub.onDisconnect != nil {
+		hub.onDisconnect(hub, c)
+	}
+}
+
+func (hub *ConnHub) removeConn(c Conn) bool {
+	conns, ok := hub.conns[c.ID()]
+	if !ok {
+		return false
+	}
+	if conns == nil {
+		return false
+	}
+
+	idx := slices.Index(conns, c)
+	if idx == -1 {
+		return false
+	}
+	conns = slices.Delete(conns, idx, idx+1)
+	if len(conns) == 0 {
+		delete(hub.conns, c.ID())
+	} else {
+		hub.conns[c.ID()] = conns
+	}
+	return true
+
+}
+
 func (hub *ConnHub) addConn(c Conn) {
-
-	if _, ok := hub.conns[c.ID()]; !ok {
-		hub.conns[c.ID()] = make([]Conn, 0, 1)
-	}
-	hub.conns[c.ID()] = append(hub.conns[c.ID()], c)
-	hub.logger.Info("new connection", slog.String("id", c.ID()))
-
-	if hub.OnConnect != nil {
-		hub.OnConnect(hub, c)
-	}
+	conns := hub.conns[c.ID()]
+	conns = append(conns, c)
+	hub.conns[c.ID()] = conns
 }

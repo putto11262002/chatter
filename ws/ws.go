@@ -5,12 +5,24 @@ import (
 )
 
 type Hub interface {
-	connect(c Conn)
-	disconnect(c Conn)
+	Connect(Conn)
+	Disconnect(Conn)
 	Start()
+	// Close closes the hub and releases any resources with time out.
+	// It should wait for the clean up to complete or until the time out.
 	Close()
+	// ServeHTTP handles the HTTP request and upgrade the connection to a websocket connection
+	// then add the connection to the hub.
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
-	pass(*InPacket)
+	// pass passes a packet to the hub.
+	// if the id in not register to the hub the packet is drop
+	pass(*Packet)
+
+	OnPacket(func(HubActions, *Packet))
+
+	OnConnect(func(HubActions, Conn))
+
+	OnDisconnect(func(HubActions, Conn))
 }
 
 type ConnFactory interface {
@@ -21,8 +33,14 @@ type ConnFactory interface {
 }
 
 type Conn interface {
-	pass() chan<- *OutPacket
+	// pass returns a write-only channel that the hub can use to send messages to the client.
+	pass() chan<- *Packet
+	// close initiates the closing of the connection.
+	// It should close the connection and release any resources.
+	// It should be non-blocking.
 	close()
+	// ID returns the unique identifier of the client that the connection belongs to.
+	// A client can have multiple connections.
 	ID() string
 	readLoop()
 	writeLoop()

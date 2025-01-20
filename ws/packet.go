@@ -10,40 +10,28 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type InPacket struct {
-	context context.Context `json:"-"`
-	Sender  string          `json:"-"`
-	Type    string          `json:"type"`
-	Body    json.RawMessage `json:"body"`
-}
-
-type OutPacket struct {
-	Receivers []string    `json:"-"`
-	Type      string      `json:"type"`
-	Body      interface{} `json:"body"`
-}
-
 type Packet struct {
-	ID   int    `json:"id"`
-	Type string `json:"type"`
+	context context.Context
+	Sender  string `json:"-"`
+	Type    string `json:"type"`
 	// Body is the body of the packet.
 	// The body is later decode into a specific type in the handler.
 	Body json.RawMessage `json:"body"`
 }
 
-func partiallyDecodeInPacket(t int, r io.Reader) (*InPacket, error) {
+func partiallyDecodeInPacket(t int, r io.Reader) (*Packet, error) {
 	if t != websocket.TextMessage {
 		return nil, fmt.Errorf("unexpected message type: %d", t)
 	}
 
-	var packet InPacket
+	var packet Packet
 	if err := json.NewDecoder(r).Decode(&packet); err != nil {
 		return nil, fmt.Errorf("json.Decoder.Decode: %w", err)
 	}
 	return &packet, nil
 }
 
-func encodeOutPacket(f func(t int) (io.WriteCloser, error), packet *OutPacket) error {
+func encodeOutPacket(f func(t int) (io.WriteCloser, error), packet *Packet) error {
 	w, err := f(websocket.TextMessage)
 	if err != nil {
 		return fmt.Errorf("NextWriter: %w", err)
