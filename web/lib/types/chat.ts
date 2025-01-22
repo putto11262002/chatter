@@ -1,30 +1,23 @@
 import { z } from "zod";
 
-export enum ChatType {
-  Private = 0,
-  Group = 1,
+export enum MemberRole {
+  Owner = "owner",
+  Admin = "admin",
+  Member = "member",
 }
-
 export type RoomMember = {
   username: string;
+  role: MemberRole;
   room_id: string;
-  room_name: string;
   last_message_read: number;
 };
 
 export type Room = {
   id: string;
   members: RoomMember[];
-  type: ChatType;
+  name: string;
   last_message_sent_at: string;
   last_message_sent: string;
-};
-
-export type RoomSummary = {
-  id: string;
-  name: string;
-  members: string[];
-  last_message_read: number;
 };
 
 export enum MessageType {
@@ -40,26 +33,22 @@ export type Message = {
   sent_at: string;
 };
 
-export const createPrivateChatPayloadSchema = z.object({
-  other: z.string(),
-});
-
-export type CreatePrivateChatPayload = z.infer<
-  typeof createPrivateChatPayloadSchema
->;
-
-export const createGroupChatPayloadSchema = z.object({
-  members: z.array(z.string()),
+export const createRoomSchema = z.object({
   name: z.string(),
 });
 
-export type CreateGroupChatPayload = z.infer<
-  typeof createGroupChatPayloadSchema
->;
+export type CreateRoomPayload = z.infer<typeof createRoomSchema>;
 
-export type CreateChatResponse = {
+export type CreateRoomResponse = {
   id: string;
 };
+
+export const addRoomMemberSchema = z.object({
+  username: z.string(),
+  role: z.nativeEnum(MemberRole),
+});
+
+export type AddRoomMemberPayload = z.infer<typeof addRoomMemberSchema>;
 
 export const sendMessagePayloadSchema = z.object({
   data: z.string(),

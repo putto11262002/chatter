@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Alert from "@/components/alert";
 import { Link, useNavigate } from "react-router-dom";
-import { useSignup } from "@/hooks/users";
+import { useRegister } from "@/hooks/users";
 import { CreateUserPayload, createUserPayloadSchema } from "@/lib/types/user";
 
 export default function Signup() {
@@ -21,7 +21,7 @@ export default function Signup() {
   });
   const navigate = useNavigate();
 
-  const { trigger, isMutating, error } = useSignup();
+  const { trigger, isMutating, error } = useRegister();
 
   return (
     <main className="h-screen w-full flex items-center justify-center">

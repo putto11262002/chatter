@@ -6,7 +6,7 @@ import useSWRMutation from "swr/mutation";
 export const useSignin = () => {
   const { mutate } = useSWRConfig();
   return useSWRMutation(
-    "/api/signin",
+    "/auth/signin",
     async (url, { arg }: { arg: SigninPayload }) => {
       const res = await api.post(url, arg);
       const data = res.data as SigninResponse;
@@ -14,7 +14,7 @@ export const useSignin = () => {
     },
     {
       onSuccess: (data) => {
-        mutate("/api/users/me", data, { revalidate: false });
+        mutate("/users/me", data, { revalidate: false });
       },
     }
   );
@@ -23,13 +23,13 @@ export const useSignin = () => {
 export const useSignout = () => {
   const { mutate } = useSWRConfig();
   return useSWRMutation(
-    "/api/signout",
+    "/auth/signout",
     async () => {
       await api.post("/api/signout");
     },
     {
-      onError: () => mutate("/api/users/me", null, false),
-      onSuccess: () => mutate("/api/users/me", null, false),
+      onError: () => mutate("/users/me", null, false),
+      onSuccess: () => mutate("/users/me", null, false),
     }
   );
 };

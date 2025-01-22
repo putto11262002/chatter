@@ -31,3 +31,5 @@ bin
 
 # SQLite
 *.db
+
+tmp

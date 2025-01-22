@@ -2,11 +2,14 @@ import { useMyRooms } from "@/hooks/chats";
 import { Link, useParams } from "react-router-dom";
 import Alert from "@/components/alert";
 import { cn } from "@/lib/utils";
-import CreateGroupChatDialog from "@/components/create-group-chat-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import ChatArea from "@/components/chat/chat-area";
+import { Button } from "@/components/ui/button";
+import { MessageCirclePlus } from "lucide-react";
+import { useCreateRoomDialog } from "@/components/create-room-dialog";
 
 export default function ChatPage() {
+  const { setOpen } = useCreateRoomDialog();
   const { data, isLoading, error } = useMyRooms();
   const params = useParams();
   const roomID = params.roomID;
@@ -16,7 +19,9 @@ export default function ChatPage() {
       <div className="grid grid-cols-[20%_80%] h-screen overflow-hidden">
         <div className="h-full flex flex-col border-r">
           <div className="flex-0 py-2 px-2 border-b">
-            <CreateGroupChatDialog />
+            <Button onClick={() => setOpen(true)} variant="outline" size="icon">
+              <MessageCirclePlus className="w-6 h-6" />
+            </Button>
           </div>
           <div className="grow">
             {error ? (

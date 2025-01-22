@@ -7,13 +7,20 @@ export class APIError extends Error {
   }
 }
 
-export const apiErorSchema = z.object({
+export const apiErrorSchema = z.object({
   code: z.number(),
   error: z.string(),
 });
 
+export const SERVER_BASE_URL =
+  (import.meta.env.VITE_SERVER_BASE_URL as string) || "http://localhost:8080";
+export const API_BASE_URL =
+  (SERVER_BASE_URL.lastIndexOf("/") === SERVER_BASE_URL.length - 1
+    ? SERVER_BASE_URL
+    : `${SERVER_BASE_URL}/`) + "api";
+
 export const api = axios.create({
-  baseURL: new URL("http://localhost:8081").toString(),
+  baseURL: API_BASE_URL.toString(),
   headers: {
     "Content-Type": "application/json",
   },
@@ -26,7 +33,7 @@ api.interceptors.response.use(
     console.error("API error", error);
     if (axios.isAxiosError(error)) {
       if (error.response) {
-        const val = apiErorSchema.safeParse(error.response.data);
+        const val = apiErrorSchema.safeParse(error.response.data);
         if (val.success) {
           throw new APIError(val.data.code, val.data.error);
         } else {
