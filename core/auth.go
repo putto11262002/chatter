@@ -7,9 +7,9 @@ import (
 )
 
 type Session struct {
-	Username  string
-	Token     string
-	ExpiresAt time.Time
+	Username  string    `json:"username"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 var (

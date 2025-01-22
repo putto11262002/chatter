@@ -6,9 +6,13 @@ import (
 )
 
 type User struct {
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Name     string `json:"name" validate:"required,min=3"`
+	Username string `json:"username" validate:"required,min=3"`
+	Password string `json:"password" validate:"required,min=8"`
+}
+
+func (u User) Validate() error {
+	return validate.Struct(u)
 }
 
 type UserWithoutSecrets struct {

@@ -20,7 +20,10 @@ func NewBaseFixture(t *testing.T) *BaseFixture {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	db, err := NewSQLiteDB("test.db", "../migrations", &SQLiteDBOption{
+		Mode:  "memory",
+		Cache: "shared",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,13 +35,13 @@ func NewBaseFixture(t *testing.T) *BaseFixture {
 		t.Fatal(err)
 	}
 
-	if err := goose.Up(db, "."); err != nil {
+	if err := goose.Up(db.DB, "."); err != nil {
 		t.Fatal(err)
 	}
 
 	return &BaseFixture{
 		ctx: ctx,
-		db:  db,
+		db:  db.DB,
 		t:   t,
 		tearDown: func() {
 			cancel()

@@ -49,7 +49,7 @@ type RoomMember struct {
 // Room represents a chat room.
 type Room struct {
 	ID                string       `json:"id"`
-	Members           []RoomMember `json:"users"`
+	Members           []RoomMember `json:"members"`
 	Name              string       `json:"name"`
 	LastMessageSentAt time.Time    `json:"last_message_sent_at"`
 	LastMessageSent   int          `json:"last_message_sent"`
