@@ -78,7 +78,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     ws.current.connect();
-    console.log("Connecting to ws");
   }, []);
 
   return (

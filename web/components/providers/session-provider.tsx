@@ -23,7 +23,7 @@ const SessionProvider = () => {
 
   if (!data || isLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center">
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
         Chatter...
       </div>
     );

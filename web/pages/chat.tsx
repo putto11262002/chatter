@@ -42,8 +42,8 @@ export default function ChatPage() {
                       <div
                         key={index}
                         className={cn(
-                          "h-12 px-3 border-b hover:bg-gray-50 cursor-pointer flex gap-3 items-center",
-                          roomID === room.id && "bg-gray-100"
+                          "h-12 px-3 border-b hover:bg-accent cursor-pointer flex gap-3 items-center",
+                          roomID === room.id && "bg-accent"
                         )}
                       >
                         <p className="font-medium grow">{room.name}</p>

@@ -6,7 +6,12 @@ import Message from "./message";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import { ScrollArea } from "../ui/scroll-area";
-import { differenceInDays, differenceInMinutes, format } from "date-fns";
+import {
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+  format,
+} from "date-fns";
 import Avatar from "../avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
@@ -63,20 +68,20 @@ export default function MessageArea({ roomID }: { roomID: string }) {
 
           const lastOfTheMinute =
             !nextMsg ||
-            Math.abs(differenceInMinutes(message.sent_at, nextMsg.sent_at)) > 1;
+            differenceInMinutes(message.sent_at, nextMsg.sent_at) > 1;
 
           const lastFromSameSender =
             !nextMsg || nextMsg.sender !== message.sender;
 
+          // If the message is not from me
+          // if the next message is send from another user
+          const shouldDisplaySender = !myMessage && lastFromSameSender;
+
           // We define group of messages as messages that are from the same sender and are sent within 1 minutes of each other
-          const endOfGroup = lastFromSameSender || lastOfTheMinute;
-          const shouldDisplaySender = !myMessage && endOfGroup;
+          const endOfGroup = lastFromSameSender && lastOfTheMinute;
 
           return (
-            <div
-              key={index}
-              className={cn("flex flex-col", endOfGroup && "mb-2")}
-            >
+            <div key={index} className="flex flex-col">
               {newDay && (
                 <div className="mt-2 pb-1 pt-2 border-t">
                   <p className="text-center text-sm text-muted-foreground ">
@@ -84,49 +89,55 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                   </p>
                 </div>
               )}
-              <div
-                className={cn(
-                  "flex flex-col",
-                  myMessage ? "items-end" : "items-start"
-                )}
-              >
-                {/* Layout to align the message to the right or left */}
-                <div className={cn("flex items-end gap-2 max-w-[70%]")}>
-                  {/* Sender avatar */}
-                  {!myMessage && (
-                    <div className="shrink-0 w-7">
-                      {shouldDisplaySender && (
-                        <Avatar size="sm" name={message.sender} />
-                      )}
-                    </div>
+              <div className="flex gap-2 items-end">
+                {/* Sender avatar */}
+                <div className="shrink-0 w-7">
+                  {shouldDisplaySender && (
+                    <Avatar size="sm" name={message.sender} />
                   )}
-
-                  {/* The actual message*/}
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Message
-                        message={message}
-                        className={!myMessage ? "bg-accent" : ""}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent align={myMessage ? "end" : "start"}>
-                      {format(message.sent_at, "dd/MM/yyyy HH:mm")}
-                    </TooltipContent>
-                  </Tooltip>
                 </div>
 
-                {/* Timestamp */}
-                {endOfGroup && (
-                  <p
-                    className={cn(
-                      "text-xs text-muted-foreground  mt-2",
-                      !myMessage && "ml-9"
-                    )}
-                  >
+                {/* Layout to align the message to the right or left */}
+                <div
+                  className={cn(
+                    "flex flex-col grow gap-1",
+                    myMessage ? "items-end" : "items-start"
+                  )}
+                >
+                  {/* The actual message	 */}
+                  <div className="max-w-[70%]">
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Message
+                          message={message}
+                          className={myMessage ? "bg-gray-200" : ""}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent align={myMessage ? "end" : "start"}>
+                        {format(message.sent_at, "dd/MM/yyyy HH:mm")}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  {/* Timestamp */}
+                  <p className="text-xs text-muted-foreground">
                     {format(message.sent_at, "dd/MM/yyyy HH:mm")}
                   </p>
-                )}
+                </div>
               </div>
+
+              <div className="flex justify-center">
+                <p className="text-xs text-muted-foreground">
+                  this sent at {format(message.sent_at, "HH:mm")} next sent at{" "}
+                  {nextMsg && format(nextMsg.sent_at, "HH:mm")}
+                </p>
+              </div>
+
+              {endOfGroup && (
+                <div className="flex justify-center">
+                  <p className="text-xs text-muted-foreground">End of group</p>
+                </div>
+              )}
             </div>
           );
         })}
