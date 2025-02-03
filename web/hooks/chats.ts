@@ -71,7 +71,8 @@ export const useChatMessageHistory = (roomID?: string) => {
       return res.data as Message[];
     },
     {
-      refreshInterval: 1000 * 60 * 5, // 5 minutes
+      refreshInterval: 0,
+      revalidateOnFocus: false,
     }
   );
 };

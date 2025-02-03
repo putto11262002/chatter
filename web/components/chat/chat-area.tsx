@@ -27,7 +27,7 @@ export default function ChatArea() {
       <div className="grow overflow-hidden">
         <MessageArea roomID={roomID} />
       </div>
-      <div className="shrink-0">
+      <div className="shrink-0 h-14 flex-0">
         <ChatMessageInput roomID={roomID} />
       </div>
     </div>

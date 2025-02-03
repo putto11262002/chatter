@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -474,6 +475,8 @@ func (s *SQLiteChatStore) GetRoomMessages(ctx context.Context, roomID string, of
 		messages = append(messages, message)
 
 	}
+
+	slices.Reverse(messages)
 
 	return messages, nil
 }

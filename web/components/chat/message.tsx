@@ -9,7 +9,7 @@ export default function Message({
 }) {
   if (message.type === MessageType.Text) {
     return (
-      <div className={cn("px-3 py-2 rounded-lg border", className)}>
+      <div className={cn("px-3 py-2 rounded-lg border text-start", className)}>
         {message.data}
       </div>
     );

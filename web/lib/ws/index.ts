@@ -8,20 +8,20 @@ type WSOptions = {
 export type Packet = {
   type: string;
   id?: number;
-  body?: unknown;
+  payload?: unknown;
 };
 
 export function createPacket(type: string, body: unknown): Packet {
   return {
     type,
-    body,
+    payload: body,
     id: Math.floor(Math.random() * 65536),
   };
 }
 
 const PacketSchema = z.object({
   type: z.string(),
-  body: z.unknown(),
+  payload: z.unknown(),
 });
 
 function encodePacket(packet: Packet): string {

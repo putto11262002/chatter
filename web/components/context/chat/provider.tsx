@@ -10,14 +10,14 @@ type SWRConfig = ReturnType<typeof useSWRConfig>;
 const handlers: Record<string, (swrConfig: SWRConfig, packet: Packet) => void> =
   {
     [PacketType.Message]: ({ mutate }: SWRConfig, packet: Packet) => {
-      const result = messageBodySchema.safeParse(packet.body);
+      const result = messageBodySchema.safeParse(packet.payload);
       if (!result.success) {
         console.error("Invalid message packet received", packet);
         return;
       }
       const message = result.data;
       mutate(
-        `/api/rooms/${message.room_id}/messages`,
+        `/rooms/${message.room_id}/messages`,
         (messages: Message[] | undefined) => {
           if (!messages) {
             return [message];
@@ -65,7 +65,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
     ws.current.sendPacket({
       type: PacketType.Message,
-      body: message,
+      payload: message,
     });
   }
 

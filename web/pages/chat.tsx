@@ -5,11 +5,13 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import ChatArea from "@/components/chat/chat-area";
 import { Button } from "@/components/ui/button";
-import { MessageCirclePlus } from "lucide-react";
+import { LogOut, MessageCirclePlus } from "lucide-react";
 import { useCreateRoomDialog } from "@/components/create-room-dialog";
+import { useSignout } from "@/hooks/auth";
 
 export default function ChatPage() {
   const { setOpen } = useCreateRoomDialog();
+  const { trigger: signout, isMutating: isSigningOut } = useSignout();
   const { data, isLoading, error } = useMyRooms();
   const params = useParams();
   const roomID = params.roomID;
@@ -36,7 +38,7 @@ export default function ChatPage() {
               <div className="grid">
                 {data.map((room, index) => {
                   return (
-                    <Link to={`/${room.id}`}>
+                    <Link key={index} to={`/${room.id}`}>
                       <div
                         key={index}
                         className={cn(
@@ -51,6 +53,16 @@ export default function ChatPage() {
                 })}
               </div>
             )}
+          </div>
+          <div className="flex-0 py-2 px-2 border-t h-14">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={isSigningOut}
+              onClick={() => signout()}
+            >
+              <LogOut className="w-6 h-6" />
+            </Button>
           </div>
         </div>
         <div className="h-full overflow-hidden">

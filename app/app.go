@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/putto11262002/chatter/core"
 	"github.com/putto11262002/chatter/pkg/router"
-	"github.com/putto11262002/chatter/ws"
 )
 
 type App struct {
@@ -30,8 +29,10 @@ type App struct {
 	server        *http.Server
 	logger        *slog.Logger
 	router        *router.Router
-	hub           ws.Hub
-	done          chan int
+	eventRouter   *core.EventRouter
+	wsManager     *core.ConnManager
+
+	done chan int
 
 	userStore core.UserStore
 	chatStore core.ChatStore
@@ -40,6 +41,8 @@ type App struct {
 	userHandler *UserHandler
 	chatHandler *ChatHandler
 	authhandler *AuthHandler
+
+	wg sync.WaitGroup
 }
 
 func New(config *Config) *App {
@@ -71,7 +74,18 @@ func (a *App) Start() {
 
 	a.config = config
 
-	a.logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	a.logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug,
+		AddSource: true,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.SourceKey {
+				source, _ := a.Value.Any().(*slog.Source)
+				if source != nil {
+					source.File = filepath.Base(source.File)
+				}
+			}
+			return a
+		},
+	}))
 
 	sqliteOptions := &core.SQLiteDBOption{
 		Mode:        "rwc",
@@ -97,11 +111,16 @@ func (a *App) Start() {
 	a.authStore = core.NewSQLiteAuthStore(a.db.DB, a.userStore, a.config.Secret)
 	a.chatStore = core.NewSQLiteChatStore(a.db.DB, a.userStore)
 
-	authenticator := NewWSAuthenticator(a.authStore)
-	a.hub = ws.New(ws.NewWSConnFactory(), authenticator,
-		ws.WithLogger(a.logger), ws.WithBaseContext(a.context))
+	a.wsManager = core.NewConnManager(a.context, &a.wg, a.logger)
+	// TODO:
+	a.wsManager.OnConnect(func(s string, i int) {})
+	a.wsManager.OnDisconnect(func(s string, i int) {})
 
-	a.hub.Start()
+	a.eventRouter = core.NewEventRouter(a.context, a.logger, a.wsManager)
+	go a.eventRouter.Listen(&a.wg)
+	a.eventRouter.On(MessageEvent, a.MessageEventHandler)
+	a.eventRouter.On(ReadMessageEvent, a.ReadMessageHandler)
+	a.eventRouter.On(TypingEvent, a.TypingHandler)
 
 	a.userHandler = NewUserHandler(a.userStore)
 	a.chatHandler = NewChatHandler(a.chatStore)
@@ -116,7 +135,13 @@ func (a *App) Start() {
 		AllowCredentials: true,
 	}))
 
-	a.router.With(authMiddleware).Router.Get("/ws", a.hub.ServeHTTP)
+	a.router.With(authMiddleware).Router.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		session := core.SessionFromRequest(r)
+		err := a.wsManager.Connect(session.Username, w, r)
+		if err != nil {
+			return
+		}
+	})
 
 	api := router.New(router.WithLogger(a.logger))
 
@@ -174,12 +199,6 @@ func (a *App) close() {
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer closeCancel()
 	var wg sync.WaitGroup
-	// close hub
-	wg.Add(1)
-	go func() {
-		a.hub.Close()
-		wg.Done()
-	}()
 
 	// close server
 	wg.Add(1)

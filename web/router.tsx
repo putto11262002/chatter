@@ -8,6 +8,7 @@ import { clearSesssionOnAuthError } from "./lib/swr/middlewares";
 import ChatPage from "./pages/chat";
 import { CreateRoomDialogProvider } from "./components/create-room-dialog";
 import RoomSettingsPage from "./pages/room-settings";
+import { TooltipProvider } from "./components/ui/tooltip";
 
 export const router = createBrowserRouter([
   {
@@ -39,7 +40,9 @@ export const router = createBrowserRouter([
               <SWRConfig value={{ use: [clearSesssionOnAuthError] }}>
                 <ChatProvider>
                   <CreateRoomDialogProvider>
-                    <Outlet />
+                    <TooltipProvider>
+                      <Outlet />
+                    </TooltipProvider>
                   </CreateRoomDialogProvider>
                 </ChatProvider>
               </SWRConfig>

@@ -1,7 +1,6 @@
 import RoomMemberForm from "@/components/room/room-member-form";
 import RoomProfileForm from "@/components/room/room-profile-form";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useRoom } from "@/hooks/chats";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -22,7 +21,7 @@ export default function RoomSettingsPage() {
 
   return (
     <main className="flex justify-center">
-      <div className="container py-4 px-2 grid gap-4">
+      <div className="container py-4 px-4 grid gap-4">
         <div className="flex items-center gap-4">
           <Button
             onClick={() => nagivate(-1)}

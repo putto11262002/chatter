@@ -6,8 +6,14 @@ import Message from "./message";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import { ScrollArea } from "../ui/scroll-area";
-import { differenceInDays, format } from "date-fns";
+import {
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+  format,
+} from "date-fns";
 import Avatar from "../avatar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
@@ -56,17 +62,25 @@ export default function MessageArea({ roomID }: { roomID: string }) {
 
           const prevMsg = index - 1 >= 0 ? messages[index - 1] : null;
 
+          const newDay =
+            prevMsg &&
+            Math.abs(differenceInDays(prevMsg.sent_at, message.sent_at)) > 1;
+
           return (
             <div key={index} className="flex flex-col">
-              {prevMsg &&
-                Math.abs(differenceInDays(prevMsg.sent_at, message.sent_at)) >
-                  1 && (
-                  <p className="text-center text-sm text-muted-foreground mt-2 pb-1">
+              {newDay && (
+                <div className="mt-2 pb-1 pt-2 border-t">
+                  <p className="text-center text-sm text-muted-foreground ">
                     {format(message.sent_at, "dd/MM/yyyy")}
                   </p>
-                )}
+                </div>
+              )}
               <div className="flex gap-2">
-                {!myMessage && <Avatar size="sm" name={message.sender} />}
+                {!myMessage && (
+                  <div className="shrink-0">
+                    <Avatar size="sm" name={message.sender} />
+                  </div>
+                )}
                 <div
                   className={cn(
                     "flex flex-col grow gap-1",
@@ -74,10 +88,17 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                   )}
                 >
                   <div className="max-w-[70%]">
-                    <Message
-                      message={message}
-                      className={myMessage ? "bg-gray-200" : ""}
-                    />
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Message
+                          message={message}
+                          className={myMessage ? "bg-gray-200" : ""}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent align={myMessage ? "end" : "start"}>
+                        {format(message.sent_at, "dd/MM/yyyy HH:mm")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </div>

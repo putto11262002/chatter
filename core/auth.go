@@ -25,3 +25,6 @@ type AuthStore interface {
 
 	Session(ctx context.Context, token string) (payload *Session, err error)
 }
+
+type HttpAuth struct {
+}
