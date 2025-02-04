@@ -4,6 +4,7 @@ import MessageArea from "./message-area";
 import ChatHeader from "./chat-header";
 import { useRoom } from "@/hooks/chats";
 import { Loader2 } from "lucide-react";
+import { StrictMode } from "react";
 
 export default function ChatArea() {
   const params = useParams();
@@ -28,7 +29,9 @@ export default function ChatArea() {
         <MessageArea roomID={roomID} />
       </div>
       <div className="shrink-0 min-h-14 flex-0">
-        <ChatMessageInput roomID={roomID} />
+        <StrictMode>
+          <ChatMessageInput roomID={roomID} />
+        </StrictMode>
       </div>
     </div>
   );

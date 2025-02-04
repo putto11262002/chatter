@@ -9,19 +9,24 @@ import ChatPage from "./pages/chat";
 import { CreateRoomDialogProvider } from "./components/create-room-dialog";
 import RoomSettingsPage from "./pages/room-settings";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 
 export const router = createBrowserRouter([
   {
     element: (
-      <SWRConfig
-        value={{
-          revalidateOnMount: true,
-          revalidateIfStale: false,
-          refreshInterval: 1000 * 60 * 5,
-        }}
-      >
-        <Outlet />
-      </SWRConfig>
+      <QueryClientProvider client={queryClient}>
+        <SWRConfig
+          value={{
+            revalidateOnMount: true,
+            revalidateIfStale: false,
+            refreshInterval: 1000 * 60 * 5,
+          }}
+        >
+          <Outlet />
+        </SWRConfig>
+      </QueryClientProvider>
     ),
     children: [
       {

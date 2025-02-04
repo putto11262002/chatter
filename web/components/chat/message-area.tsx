@@ -1,86 +1,114 @@
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { useInfiniteScrollMessageHistory, useRoom } from "@/hooks/chats";
+import { useEffect, useRef, useLayoutEffect } from "react";
+import { useInfiniteMessages } from "@/hooks/chats";
 import { useSession } from "../providers/session-provider";
-import Alert from "../alert";
-import { Loader2 } from "lucide-react";
 import Message from "./message";
 import { cn } from "@/lib/utils";
 import { differenceInDays, differenceInMinutes, format } from "date-fns";
 import Avatar from "../avatar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { LoaderIcon } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
+  // const {
+  //   data: pages,
+  //   isLoading,
+  //   setSize,
+  // } = useInfiniteScrollMessageHistory(roomID);
   const {
-    data: pages,
-    isLoading,
-    size,
-    setSize,
-    error,
-  } = useInfiniteScrollMessageHistory(roomID);
+    data,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    isInitialLoading,
+  } = useInfiniteMessages(roomID);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { data: room, isLoading: isLoadingRoom } = useRoom(roomID);
   const oldestMessageRef = useRef<HTMLDivElement>(null);
-  const messages = pages?.reverse().flat() || [];
-  const hasMore = pages ? pages[pages.length - 1].length === 20 : false;
 
-  // Ref to store the previous scroll height before fetching new messages
-  const previousScrollHeightRef = useRef<number>(0);
+  // Store both the scroll height and scroll position
+  const scrollPositionRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  }>({ scrollHeight: 0, scrollTop: 0 });
 
   // Intersection observer to load more messages when the oldest message is in view
   useEffect(() => {
     const observer = new IntersectionObserver(
       async (entries) => {
         const entry = entries[0];
-        if (entry.isIntersecting && hasMore) {
-          setSize((size) => size + 1);
-          if (scrollAreaRef.current) {
-            if (scrollAreaRef.current) {
-              // Record scroll height before fetching older messages
+        if (
+          entry.isIntersecting &&
+          hasNextPage &&
+          scrollAreaRef.current &&
+          !isFetchingNextPage
+        ) {
+          const scrollContainer = scrollAreaRef.current?.querySelector(
+            "[data-radix-scroll-area-viewport]"
+          );
+          if (!scrollContainer) return;
+          // Store both scroll height and position before loading more messages
+          scrollPositionRef.current = {
+            scrollHeight: scrollContainer.scrollHeight,
+            scrollTop: scrollContainer.scrollTop,
+          };
 
-              previousScrollHeightRef.current =
-                scrollAreaRef.current.scrollHeight -
-                scrollAreaRef.current.scrollTop;
-              console.log(
-                "scrollHeight",
-                scrollAreaRef.current.scrollHeight,
-                "from observer previousScrollHeightRef.current",
-                previousScrollHeightRef.current
-              );
-            }
-          }
+          fetchNextPage();
         }
       },
       {
-        threshold: 1,
-        root:
-          scrollAreaRef.current?.querySelector(
-            "[data-radix-scroll-area-viewport]"
-          ) || null,
+        threshold: 0.1,
+        root: scrollAreaRef.current || null,
       }
     );
+
     if (oldestMessageRef.current) observer.observe(oldestMessageRef.current);
     return () => observer.disconnect();
-  }, [pages, isLoading, hasMore]);
+  }, [data, hasNextPage, isFetchingNextPage]);
 
-  // Adjust scroll position after older messages are loaded
+  // Use useLayoutEffect to adjust scroll position before browser paint
   useLayoutEffect(() => {
-    if (!(previousScrollHeightRef.current || scrollAreaRef.current)) return;
+    if (!scrollAreaRef.current) return;
+    const scrollContainer = scrollAreaRef.current?.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    );
+    if (!scrollContainer) return;
 
-    requestAnimationFrame(() => {
-      const newScrollHeight = scrollAreaRef.current.scrollHeight;
-      const heightDiff = newScrollHeight - previousScrollHeightRef.current;
-      scrollAreaRef.current.scrollTop = heightDiff;
-    });
-  }, [pages]);
+    const { scrollHeight: previousScrollHeight, scrollTop: previousScrollTop } =
+      scrollPositionRef.current;
+
+    const newScrollHeight = scrollContainer.scrollHeight;
+    const newScrollTop =
+      newScrollHeight - previousScrollHeight + previousScrollTop;
+
+    // Immediately set the scroll position to maintain the relative view
+    scrollContainer.scrollTop = newScrollTop;
+
+    // // Reset the stored position
+    scrollPositionRef.current = { scrollHeight: 0, scrollTop: 0 };
+  }, [data]);
 
   return (
-    <div ref={scrollAreaRef} className="h-full overflow-y-auto">
-      <div className="flex flex-col gap-2 px-4">
-        <div ref={oldestMessageRef}></div>
-        {messages.map((message, index) => {
+    <ScrollArea ref={scrollAreaRef} className="h-full relative">
+      <div className="flex flex-col gap-2 px-4 py-2">
+        <div
+          className="flex justify-center items-center"
+          ref={oldestMessageRef}
+        >
+          {hasNextPage || isInitialLoading ? (
+            <p className="flex items-center justify-center gap-2">
+              <LoaderIcon className="w-4 h-4 animate-spin" />{" "}
+              <span className="text-xs text-muted-foreground">
+                Fetching more messages
+              </span>{" "}
+            </p>
+          ) : (
+            <p className="text-xs text-center text-muted-foreground">
+              No more messages
+            </p>
+          )}
+        </div>
+        {data?.pages.flat().map((message, index, messages) => {
           const myMessage = message.sender === session.username;
           const nextMsg =
             index + 1 <= messages.length - 1 ? messages[index + 1] : null;
@@ -122,17 +150,10 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                       )}
                     </div>
                   )}
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Message
-                        message={message}
-                        className={!myMessage ? "bg-accent" : ""}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent align={myMessage ? "end" : "start"}>
-                      {format(message.sent_at, "dd/MM/yyyy HH:mm")}
-                    </TooltipContent>
-                  </Tooltip>
+                  <Message
+                    message={message}
+                    className={!myMessage ? "bg-accent" : ""}
+                  />
                 </div>
                 {endOfGroup && (
                   <p
@@ -149,6 +170,6 @@ export default function MessageArea({ roomID }: { roomID: string }) {
           );
         })}
       </div>
-    </div>
+    </ScrollArea>
   );
 }
