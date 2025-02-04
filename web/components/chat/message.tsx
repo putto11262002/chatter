@@ -1,19 +1,30 @@
 import { cn } from "@/lib/utils";
 import { Message as _Message, MessageType } from "@/lib/types/chat";
-export default function Message({
-  message,
-  className,
-}: {
-  message: _Message;
-  className?: string;
-}) {
-  if (message.type === MessageType.Text) {
-    return (
-      <div className={cn("px-3 py-2 rounded-lg border text-start", className)}>
-        {message.data}
-      </div>
-    );
-  }
+import { forwardRef, memo } from "react";
 
-  return <div className="">Unsupported message type</div>;
-}
+const Message = memo(
+  forwardRef<HTMLDivElement, { message: _Message; className?: string }>(
+    ({ message, className }, ref) => {
+      if (message.type === MessageType.Text) {
+        return (
+          <div
+            ref={ref}
+            className={cn("px-3 py-2 rounded-lg border text-start", className)}
+          >
+            {message.data}
+          </div>
+        );
+      }
+
+      return (
+        <div ref={ref} className={className}>
+          Unsupported message type
+        </div>
+      );
+    }
+  )
+);
+
+Message.displayName = "Message";
+
+export default Message;

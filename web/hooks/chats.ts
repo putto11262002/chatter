@@ -1,4 +1,5 @@
 import useSWRMutation from "swr/mutation";
+import useSWRInfinite from "swr/infinite";
 import {
   AddRoomMemberPayload,
   CreateRoomPayload,
@@ -7,7 +8,8 @@ import {
   Room,
 } from "@/lib/types/chat";
 import { api } from "@/lib/api";
-import useSWR, { useSWRConfig } from "swr";
+import useSWR, { mutate, useSWRConfig } from "swr";
+import { useEffect, useState } from "react";
 
 export const useCreateRoom = () => {
   const { mutate } = useSWRConfig();
@@ -60,6 +62,22 @@ export const useMyRooms = () => {
       return res.data as Room[];
     },
     {}
+  );
+};
+
+export const useInfiniteScrollMessageHistory = (roomID?: string) => {
+  const limit = 20;
+
+  return useSWRInfinite(
+    (index, prev) => {
+      if (!roomID) return false;
+      if (prev && prev.length < 1) return null;
+      return `/rooms/${roomID}/messages?offset=${index * limit}&limit=${limit}`;
+    },
+    async (url) => {
+      const res = await api.get(url);
+      return res.data as Message[];
+    }
   );
 };
 
