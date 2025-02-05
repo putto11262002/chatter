@@ -1,7 +1,7 @@
 import { MessageType } from "@/lib/types/chat";
 import { z } from "zod";
 
-export enum PacketType {
+export enum EventName {
   Message = "message",
   ReadMessage = "read_message",
   Online = "online",
@@ -23,8 +23,8 @@ export type MessageBody = z.infer<typeof messageBodySchema>;
 
 export const readMessageBodySchema = z.object({
   room_id: z.string(),
-  message_id: z.number(),
   read_at: z.string(),
+  read_by: z.string(),
   last_read_message: z.number(),
 });
 

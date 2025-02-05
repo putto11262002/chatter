@@ -3,13 +3,14 @@ import Signup from "./pages/signup";
 import Signin from "./pages/signin";
 import SessionProvider from "./components/providers/session-provider";
 import { SWRConfig } from "swr";
-import { ChatProvider } from "@/components/context/chat/provider";
 import { clearSesssionOnAuthError } from "./lib/swr/middlewares";
 import ChatPage from "./pages/chat";
 import { CreateRoomDialogProvider } from "./components/create-room-dialog";
 import RoomSettingsPage from "./pages/room-settings";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WSProvider } from "./real-time/context";
+import { storeEventHandlers } from "./real-time/handlers";
 
 const queryClient = new QueryClient();
 
@@ -43,13 +44,13 @@ export const router = createBrowserRouter([
           {
             element: (
               <SWRConfig value={{ use: [clearSesssionOnAuthError] }}>
-                <ChatProvider>
+                <WSProvider handlers={storeEventHandlers}>
                   <CreateRoomDialogProvider>
                     <TooltipProvider>
                       <Outlet />
                     </TooltipProvider>
                   </CreateRoomDialogProvider>
-                </ChatProvider>
+                </WSProvider>
               </SWRConfig>
             ),
 

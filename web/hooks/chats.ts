@@ -80,6 +80,7 @@ export const useInfiniteMessages = (roomID: string) => {
       if (lastPage.length < 20) return undefined;
       return lastPageParam + 1;
     },
+
     staleTime: Infinity,
     select: (data) => ({
       pages: [...data.pages].reverse(),

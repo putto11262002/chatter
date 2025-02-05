@@ -2,19 +2,37 @@ import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Form, FormField } from "../ui/form";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Textarea } from "../ui/textarea";
-import { useChat } from "../context/chat/provider";
 import { MessageType } from "@/lib/types/chat";
+import { useSendMessage, useTyping } from "@/real-time/hooks";
+import { useRealtimeStore } from "@/store/real-time";
 
 export default function ChatMessageInput({ roomID }: { roomID: string }) {
   const timeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const form = useForm<{ message: string }>();
   const message = form.watch("message");
-  const { sendMessage } = useChat();
+  const { send } = useSendMessage();
+  const { stopTyping, startTyping } = useTyping();
+  const [typing, setTyping] = useState(false);
+
+  useEffect(() => {
+    if (!typing) {
+      return;
+    }
+
+    startTyping(roomID);
+    const timeout = setTimeout(() => {
+      setTyping(false);
+      stopTyping(roomID);
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [typing, roomID]);
 
   const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    setTyping(true);
     if (textareaRef.current) {
       // Reset height to compute the new scrollHeight correctly
       textareaRef.current.style.height = "auto";
@@ -47,7 +65,7 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
     if (!data) {
       return;
     }
-    sendMessage({ data, type: MessageType.Text, room_id: roomID });
+    send({ data, type: MessageType.Text, room_id: roomID });
     form.reset({ message: "" });
 
     // Reset the height back to auto after sending
@@ -70,7 +88,9 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
             <Textarea
               className="grow min-h-[30px] resize-none"
               value={field.value}
-              onChange={field.onChange}
+              onChange={(e) => {
+                field.onChange(e);
+              }}
               ref={textareaRef}
               rows={1}
               onInput={handleInput}

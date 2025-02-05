@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { LogOut, MessageCirclePlus } from "lucide-react";
 import { useCreateRoomDialog } from "@/components/create-room-dialog";
 import { useSignout } from "@/hooks/auth";
+import { useWS } from "@/real-time/context";
+import { ReadyState } from "@/real-time/ws";
 
 export default function ChatPage() {
   const { setOpen } = useCreateRoomDialog();
@@ -15,15 +17,25 @@ export default function ChatPage() {
   const { data, isLoading, error } = useMyRooms();
   const params = useParams();
   const roomID = params.roomID;
+  const { readyState } = useWS();
 
   return (
     <main className="h-screen w-full">
       <div className="grid grid-cols-[20%_80%] h-screen overflow-hidden">
         <div className="h-full flex flex-col border-r">
-          <div className="flex-0 py-2 px-2 border-b">
+          <div className="flex-0 py-2 px-2 border-b flex justify-between items-center">
             <Button onClick={() => setOpen(true)} variant="outline" size="icon">
               <MessageCirclePlus className="w-6 h-6" />
             </Button>
+            <div className="px-2 px-2">
+              <div
+                className={cn(
+                  "rounded-full h-4 w-4 text-xs font-medium",
+                  readyState === ReadyState.Open &&
+                    "bg-green-300 border-green-500 text-green-900"
+                )}
+              ></div>
+            </div>
           </div>
           <div className="grow">
             {error ? (
@@ -54,7 +66,7 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          <div className="flex-0 py-2 px-2 border-t h-14">
+          <div className="flex-0 py-2 px-2 border-t h-14 flex items-center">
             <Button
               variant="outline"
               size="icon"

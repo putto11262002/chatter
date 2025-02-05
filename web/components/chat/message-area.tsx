@@ -1,5 +1,5 @@
-import { useEffect, useRef, useLayoutEffect } from "react";
-import { useInfiniteMessages } from "@/hooks/chats";
+import { useEffect, useRef, useLayoutEffect, useMemo } from "react";
+import { useInfiniteMessages, useRoom } from "@/hooks/chats";
 import { useSession } from "../providers/session-provider";
 import Message from "./message";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,9 @@ import { differenceInDays, differenceInMinutes, format } from "date-fns";
 import Avatar from "../avatar";
 import { LoaderIcon } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
+import { useRealtimeStore } from "@/store/real-time";
+import { useMessageScroll } from "./message-scroll-context";
+import { UserRealtimeInfo } from "@/store/user";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
@@ -22,8 +25,27 @@ export default function MessageArea({ roomID }: { roomID: string }) {
     fetchNextPage,
     isInitialLoading,
   } = useInfiniteMessages(roomID);
+  const { data: room } = useRoom(roomID);
 
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const realtimeMessages =
+    useRealtimeStore((state) => state.messages)[roomID] || [];
+  const realtimeUserInfo = useRealtimeStore((state) => state.users);
+  const roomMemberInfo = useMemo(
+    () =>
+      room?.members.reduce<Array<UserRealtimeInfo>>((acc, member) => {
+        const memberInfo = realtimeUserInfo[member.username];
+        if (memberInfo) {
+          acc.push(memberInfo);
+        }
+        return acc;
+      }, []),
+    [room, realtimeUserInfo]
+  );
+  const typingMembers = roomMemberInfo?.filter((member) => member.typing);
+
+  const messages = [...(data?.pages || []), realtimeMessages];
+
+  const { ref: scrollAreaRef, getScrollContainer } = useMessageScroll();
   const oldestMessageRef = useRef<HTMLDivElement>(null);
 
   // Store both the scroll height and scroll position
@@ -37,17 +59,14 @@ export default function MessageArea({ roomID }: { roomID: string }) {
     const observer = new IntersectionObserver(
       async (entries) => {
         const entry = entries[0];
+        const scrollContainer = getScrollContainer();
         if (
           entry.isIntersecting &&
           hasNextPage &&
-          scrollAreaRef.current &&
+          scrollContainer &&
           !isFetchingNextPage
         ) {
-          const scrollContainer = scrollAreaRef.current?.querySelector(
-            "[data-radix-scroll-area-viewport]"
-          );
-          if (!scrollContainer) return;
-          // Store both scroll height and position before loading more messages
+          // Store both scroll height and position before loading more messages"
           scrollPositionRef.current = {
             scrollHeight: scrollContainer.scrollHeight,
             scrollTop: scrollContainer.scrollTop,
@@ -68,10 +87,7 @@ export default function MessageArea({ roomID }: { roomID: string }) {
 
   // Use useLayoutEffect to adjust scroll position before browser paint
   useLayoutEffect(() => {
-    if (!scrollAreaRef.current) return;
-    const scrollContainer = scrollAreaRef.current?.querySelector(
-      "[data-radix-scroll-area-viewport]"
-    );
+    const scrollContainer = getScrollContainer();
     if (!scrollContainer) return;
 
     const { scrollHeight: previousScrollHeight, scrollTop: previousScrollTop } =
@@ -87,6 +103,28 @@ export default function MessageArea({ roomID }: { roomID: string }) {
     // // Reset the stored position
     scrollPositionRef.current = { scrollHeight: 0, scrollTop: 0 };
   }, [data]);
+
+  useLayoutEffect(() => {
+    const lastest = realtimeMessages
+      ? realtimeMessages[realtimeMessages.length - 1]
+      : null;
+    if (!lastest) return;
+    // if you sent the lastest message scroll to the bottom
+    const scrollContainer = getScrollContainer();
+    if (!scrollContainer) return;
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+  }, [realtimeMessages]);
+
+  useLayoutEffect(() => {
+    if (!typingMembers) return;
+    if (typingMembers.length === 0) return;
+    const scrollContainer = getScrollContainer();
+    if (!scrollContainer) return;
+    // if not already at the bottom scroll to the bottom
+    if (scrollContainer.scrollTop !== scrollContainer.scrollHeight) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
+  }, [typingMembers]);
 
   return (
     <ScrollArea ref={scrollAreaRef} className="h-full relative">
@@ -108,7 +146,7 @@ export default function MessageArea({ roomID }: { roomID: string }) {
             </p>
           )}
         </div>
-        {data?.pages.flat().map((message, index, messages) => {
+        {messages.flat().map((message, index, messages) => {
           const myMessage = message.sender === session.username;
           const nextMsg =
             index + 1 <= messages.length - 1 ? messages[index + 1] : null;
@@ -169,6 +207,18 @@ export default function MessageArea({ roomID }: { roomID: string }) {
             </div>
           );
         })}
+        {typingMembers && typingMembers.length > 0 && (
+          <div className="flex items-center gap-2">
+            {typingMembers.slice(0, 4).map((member) => (
+              <div
+                key={member.username}
+                className="animate-bounce [animation-duration:300ms]"
+              >
+                <Avatar size="sm" name={member.username} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </ScrollArea>
   );

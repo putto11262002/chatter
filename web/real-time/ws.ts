@@ -39,10 +39,10 @@ function decodePacket(raw: string): Packet | null {
 }
 
 export enum ReadyState {
-  Connecting = 0,
-  Open = 1,
-  Closing = 2,
-  Closed = 3,
+  Connecting = "connecting",
+  Open = "connected",
+  Closing = "disconnecting",
+  Closed = "disconnected",
 }
 
 export class WS {
@@ -95,6 +95,9 @@ export class WS {
   }
 
   sendPacket(packet: Packet) {
+    if (this.readyState !== ReadyState.Open) {
+      return;
+    }
     this.conn.send(encodePacket(packet));
   }
 

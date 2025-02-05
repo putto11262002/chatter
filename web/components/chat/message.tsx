@@ -10,7 +10,10 @@ const Message = forwardRef<
     return (
       <div
         ref={ref}
-        className={cn("px-3 py-2 rounded-lg border text-start", className)}
+        className={cn(
+          "w-full px-3 py-2 rounded-lg border text-start break-words",
+          className
+        )}
       >
         {message.data}
       </div>

@@ -5,6 +5,7 @@ import ChatHeader from "./chat-header";
 import { useRoom } from "@/hooks/chats";
 import { Loader2 } from "lucide-react";
 import { StrictMode } from "react";
+import { MessageScrollProvider } from "./message-scroll-context";
 
 export default function ChatArea() {
   const params = useParams();
@@ -21,18 +22,20 @@ export default function ChatArea() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="shrink-0">
-        <ChatHeader room={room} />
+    <MessageScrollProvider>
+      <div className="flex flex-col h-full">
+        <div className="shrink-0">
+          <ChatHeader room={room} />
+        </div>
+        <div className="grow overflow-hidden">
+          <MessageArea roomID={roomID} />
+        </div>
+        <div className="shrink-0 min-h-14 flex-0">
+          <StrictMode>
+            <ChatMessageInput roomID={roomID} />
+          </StrictMode>
+        </div>
       </div>
-      <div className="grow overflow-hidden">
-        <MessageArea roomID={roomID} />
-      </div>
-      <div className="shrink-0 min-h-14 flex-0">
-        <StrictMode>
-          <ChatMessageInput roomID={roomID} />
-        </StrictMode>
-      </div>
-    </div>
+    </MessageScrollProvider>
   );
 }
