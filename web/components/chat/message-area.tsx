@@ -1,7 +1,6 @@
 import { useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { useInfiniteMessages, useRoom } from "@/hooks/chats";
 import { useSession } from "../providers/session-provider";
-import Message from "./message";
 import { cn } from "@/lib/utils";
 import { differenceInDays, differenceInMinutes, format } from "date-fns";
 import Avatar from "../avatar";
@@ -13,11 +12,6 @@ import { UserRealtimeInfo } from "@/store/user";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
-  // const {
-  //   data: pages,
-  //   isLoading,
-  //   setSize,
-  // } = useInfiniteScrollMessageHistory(roomID);
   const {
     data,
     hasNextPage,
@@ -41,7 +35,9 @@ export default function MessageArea({ roomID }: { roomID: string }) {
       }, []),
     [room, realtimeUserInfo]
   );
-  const typingMembers = roomMemberInfo?.filter((member) => member.typing);
+  const typingMembers = roomMemberInfo
+    ?.filter((member) => member.username !== session.username)
+    .filter((member) => member.typing === roomID);
 
   const messages = [...(data?.pages || []), realtimeMessages];
 
@@ -127,10 +123,13 @@ export default function MessageArea({ roomID }: { roomID: string }) {
   }, [typingMembers]);
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="h-full relative">
-      <div className="flex flex-col gap-2 px-4 py-2">
+    <ScrollArea
+      ref={scrollAreaRef}
+      className="h-full relative w-full [&>div>div[style]]:!block"
+    >
+      <div className="flex flex-col gap-2 px-4 py-2 w-full min-w-0 overflow-hidden ">
         <div
-          className="flex justify-center items-center"
+          className="flex justify-center items-center w-full min-w-0"
           ref={oldestMessageRef}
         >
           {hasNextPage || isInitialLoading ? (
@@ -153,7 +152,7 @@ export default function MessageArea({ roomID }: { roomID: string }) {
           const prevMsg = index - 1 >= 0 ? messages[index - 1] : null;
           const newDay =
             prevMsg &&
-            Math.abs(differenceInDays(prevMsg.sent_at, message.sent_at)) > 1;
+            Math.abs(differenceInDays(prevMsg.sent_at, message.sent_at)) >= 1;
           const lastOfTheMinute =
             !nextMsg ||
             Math.abs(differenceInMinutes(message.sent_at, nextMsg.sent_at)) > 1;
@@ -165,7 +164,10 @@ export default function MessageArea({ roomID }: { roomID: string }) {
           return (
             <div
               key={message.id}
-              className={cn("flex flex-col", endOfGroup && "mb-2")}
+              className={cn(
+                "flex flex-col overflow-hidden min-w-0 w-full",
+                endOfGroup && "mb-2"
+              )}
             >
               {newDay && (
                 <div className="mt-2 pb-1 pt-2 border-t">
@@ -176,11 +178,11 @@ export default function MessageArea({ roomID }: { roomID: string }) {
               )}
               <div
                 className={cn(
-                  "flex flex-col",
+                  "flex flex-col overflow-hidden w-full",
                   myMessage ? "items-end" : "items-start"
                 )}
               >
-                <div className={cn("flex items-end gap-2 max-w-[70%]")}>
+                <div className={cn("flex items-end gap-2 max-w-[70%] min-w-0")}>
                   {!myMessage && (
                     <div className="shrink-0 w-7">
                       {shouldDisplaySender && (
@@ -188,10 +190,14 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                       )}
                     </div>
                   )}
-                  <Message
-                    message={message}
-                    className={!myMessage ? "bg-accent" : ""}
-                  />
+                  <div
+                    className={cn(
+                      "w-full min-w-0 overflow-hidden px-3 py-2 rounded-lg border text-start break-words whitespace-pre-wrap",
+                      !myMessage && "bg-accent"
+                    )}
+                  >
+                    {message.data}
+                  </div>
                 </div>
                 {endOfGroup && (
                   <p

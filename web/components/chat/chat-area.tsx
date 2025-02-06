@@ -4,7 +4,6 @@ import MessageArea from "./message-area";
 import ChatHeader from "./chat-header";
 import { useRoom } from "@/hooks/chats";
 import { LoaderIcon } from "lucide-react";
-import { StrictMode } from "react";
 import { MessageScrollProvider } from "./message-scroll-context";
 
 export default function ChatArea() {
@@ -39,9 +38,7 @@ export default function ChatArea() {
           <MessageArea roomID={roomID} />
         </div>
         <div className="shrink-0 min-h-14 flex-0">
-          <StrictMode>
-            <ChatMessageInput roomID={roomID} />
-          </StrictMode>
+          <ChatMessageInput roomID={roomID} />
         </div>
       </div>
     </MessageScrollProvider>

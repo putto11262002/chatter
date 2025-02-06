@@ -11,7 +11,8 @@ const Message = forwardRef<
       <div
         ref={ref}
         className={cn(
-          "w-full px-3 py-2 rounded-lg border text-start break-words",
+          "w-full min-w-0 overflow-hidden px-3 py-2 rounded-lg border text-start break-words whitespace-pre-wrap",
+
           className
         )}
       >

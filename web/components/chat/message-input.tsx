@@ -17,26 +17,22 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
   const [typing, setTyping] = useState(false);
   const [rows, setRows] = useState(1);
 
-  useEffect(() => {
+  const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
     if (!typing) {
-      return;
+      startTyping(roomID);
+      setTyping(true);
     }
 
-    startTyping(roomID);
+    // Reset the timeout every time the user types
+    if (timeRef.current) {
+      clearTimeout(timeRef.current);
+    }
+
     timeRef.current = setTimeout(() => {
       setTyping(false);
       stopTyping(roomID);
     }, 1000);
 
-    return () => {
-      if (timeRef.current) {
-        clearTimeout(timeRef.current);
-      }
-    };
-  }, [typing, roomID]);
-
-  const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
-    setTyping(true);
     const newRows = Math.min(
       Math.max(e.currentTarget.value.split("\n").length, 1),
       5
@@ -67,6 +63,7 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
 
     // Reset the height back to auto after sending
     setRows(1);
+
     if (timeRef.current) {
       clearTimeout(timeRef.current);
     }
@@ -75,6 +72,16 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
       stopTyping(roomID);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      setTyping(false);
+      form.reset({ message: "" });
+      if (timeRef.current) {
+        clearTimeout(timeRef.current);
+      }
+    };
+  }, [roomID]);
 
   return (
     <Form {...form}>
