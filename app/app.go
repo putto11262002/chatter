@@ -113,10 +113,44 @@ func (a *App) Start() {
 
 	a.wsManager = core.NewConnManager(a.context, &a.wg, a.logger)
 	// TODO:
-	a.wsManager.OnConnect(func(s string, i int) {})
-	a.wsManager.OnDisconnect(func(s string, i int) {})
+	a.wsManager.OnUserConnected(func(username string) {
+		// if user is not already connected, send a message to all friends that user is online
+		friends, err := a.chatStore.GetFriends(a.context, username)
+		if err != nil {
+			return
+		}
+		payload := OnlineEventPayload{Username: username}
+		a.eventRouter.EmitTo(OnlineEvent, payload, friends...)
+
+	})
+
+	a.wsManager.OnConnectionOpened(func(username string, i int) {
+
+		friends, err := a.chatStore.GetFriends(a.context, username)
+		if err != nil {
+			return
+		}
+		// now send the online status of all friends to the user
+		for _, friend := range friends {
+			connected := a.wsManager.IsUserConnected(friend)
+			if connected {
+				payload := OnlineEventPayload{Username: friend}
+				a.eventRouter.EmitTo(OnlineEvent, payload, username)
+			}
+		}
+	})
+
+	a.wsManager.OnUserDisconnected(func(username string) {
+		friends, err := a.chatStore.GetFriends(a.context, username)
+		if err != nil {
+			return
+		}
+		payload := OfflineEventPayload{Username: username}
+		a.eventRouter.EmitTo(OfflineEvent, payload, friends...)
+	})
 
 	a.eventRouter = core.NewEventRouter(a.context, a.logger, a.wsManager)
+	a.wg.Add(1)
 	go a.eventRouter.Listen(&a.wg)
 	a.eventRouter.On(MessageEvent, a.MessageEventHandler)
 	a.eventRouter.On(ReadMessageEvent, a.ReadMessageHandler)

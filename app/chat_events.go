@@ -14,6 +14,7 @@ const (
 	ReadMessageEvent = "read_message"
 	OnlineEvent      = "online"
 	OfflineEvent     = "offline"
+	IsOnlineEvent    = "is_online"
 	TypingEvent      = "typing"
 )
 
@@ -37,6 +38,18 @@ type TypingEventPayload struct {
 	Typing   bool   `json:"typing"`
 	Username string `json:"username"`
 	RoomID   string `json:"room_id"`
+}
+
+type OnlineEventPayload struct {
+	Username string `json:"username"`
+}
+
+type OfflineEventPayload struct {
+	Username string `json:"username"`
+}
+
+type IsOnlineEventPayload struct {
+	Username string `json:"username"`
 }
 
 func (app *App) MessageEventHandler(ctx context.Context, e *core.Event) error {

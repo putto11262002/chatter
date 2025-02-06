@@ -7,6 +7,7 @@ export enum EventName {
   Online = "online",
   Offline = "offline",
   Typing = "typing",
+  IsOnline = "is_online",
 }
 
 // Define schemas for each payload type
@@ -37,3 +38,17 @@ export const typingBodySchema = z.object({
 });
 
 export type TypingBody = z.infer<typeof typingBodySchema>;
+
+export const onlineBodySchema = z.object({
+  username: z.string(),
+});
+
+export type OnlineBody = z.infer<typeof onlineBodySchema>;
+
+export const offlineBodySchema = onlineBodySchema;
+
+export type OfflineBody = z.infer<typeof offlineBodySchema>;
+
+export const isOnlineBodySchema = onlineBodySchema;
+
+export type IsOnlineBody = z.infer<typeof isOnlineBodySchema>;

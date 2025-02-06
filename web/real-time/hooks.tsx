@@ -1,8 +1,15 @@
 import { useSession } from "@/components/providers/session-provider";
 import { ReadyState } from "./ws";
 import { useWS } from "./context";
-import { EventName, MessageBody, TypingBody, typingBodySchema } from "./data";
+import {
+  EventName,
+  IsOnlineBody,
+  MessageBody,
+  TypingBody,
+  typingBodySchema,
+} from "./data";
 import { useRealtimeStore } from "@/store/real-time";
+import { UserRealtimeInfo } from "@/store/user";
 
 export const useSendMessage = () => {
   const { ws } = useWS();
@@ -39,5 +46,31 @@ export const useTyping = () => {
     available: readyState === ReadyState.Open,
     startTyping: (roomID: string) => emitTyping(roomID, true),
     stopTyping: (roomID: string) => emitTyping(roomID, false),
+  };
+};
+
+export const useRealtimeUserInfo = () => {
+  const users = useRealtimeStore((state) => state.users);
+  const { ws } = useWS();
+  const session = useSession();
+  return {
+    get: (username: string): UserRealtimeInfo => {
+      if (username === session.username) {
+        return {
+          username: session.username,
+          online: true,
+          typing: users[username]?.typing || null,
+        };
+      }
+      const realtimeInfo = users[username];
+      if (!realtimeInfo) {
+        const payload: IsOnlineBody = {
+          username,
+        };
+        ws.sendPacket({ type: EventName.IsOnline, payload });
+        return { username, typing: null, online: false };
+      }
+      return realtimeInfo;
+    },
   };
 };

@@ -9,6 +9,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { useRealtimeStore } from "@/store/real-time";
 import { useMessageScroll } from "./message-scroll-context";
 import { UserRealtimeInfo } from "@/store/user";
+import { useRealtimeUserInfo } from "@/real-time/hooks";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
@@ -43,6 +44,8 @@ export default function MessageArea({ roomID }: { roomID: string }) {
 
   const { ref: scrollAreaRef, getScrollContainer } = useMessageScroll();
   const oldestMessageRef = useRef<HTMLDivElement>(null);
+
+  const { get } = useRealtimeUserInfo();
 
   // Store both the scroll height and scroll position
   const scrollPositionRef = useRef<{
@@ -186,7 +189,11 @@ export default function MessageArea({ roomID }: { roomID: string }) {
                   {!myMessage && (
                     <div className="shrink-0 w-7">
                       {shouldDisplaySender && (
-                        <Avatar size="sm" name={message.sender} />
+                        <Avatar
+                          online={get(message.sender).online}
+                          size="sm"
+                          name={message.sender}
+                        />
                       )}
                     </div>
                   )}

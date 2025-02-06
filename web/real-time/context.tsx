@@ -19,9 +19,11 @@ export type EventHandler = (e: Packet) => void;
 export function WSProvider({
   children,
   handlers,
+  onReadyStateChange,
 }: {
   children: React.ReactNode;
   handlers: Record<string, EventHandler>;
+  onReadyStateChange?: (state: ReadyState) => void;
 }) {
   const [readyState, setReadyState] = React.useState<ReadyState>(
     ReadyState.Closed
@@ -33,6 +35,10 @@ export function WSProvider({
       onPacketReceived: handlePacket,
     })
   );
+
+  useEffect(() => {
+    if (onReadyStateChange) onReadyStateChange(readyState);
+  }, [readyState, onReadyStateChange]);
 
   function handlePacket(packet: Packet) {
     const handler = handlers[packet.type];

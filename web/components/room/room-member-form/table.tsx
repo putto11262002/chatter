@@ -18,15 +18,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRemoveRoomMember } from "@/hooks/chats";
+import { useRealtimeUserInfo } from "@/real-time/hooks";
+import { cn } from "@/lib/utils";
 
 export default function Table({ room }: { room: Room }) {
   const { setOpenAddMemberDialog } = useRoomMemberFormContext();
+  const { get } = useRealtimeUserInfo();
   return (
     <div className="grid gap-4">
       <_Table>
         <TableHeader className="">
           <TableRow>
             <TableHead>Username</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>
               <span className="sr-only">Actions</span>
@@ -38,6 +42,20 @@ export default function Table({ room }: { room: Room }) {
             <TableRow key={idx}>
               <TableCell className="text-nowrap font-medium">
                 {member.username}
+              </TableCell>
+              <TableCell>
+                <div className="flex">
+                  <div
+                    className={cn(
+                      "px-2 py-1 rounded-md text-xs font-medium",
+                      get(member.username).online
+                        ? "bg-green-200 text-green-600 border-green-600"
+                        : "bg-red-200 border-red-600 text-red-600"
+                    )}
+                  >
+                    {get(member.username).online ? "online" : "offline"}
+                  </div>
+                </div>
               </TableCell>
               <TableCell>
                 <Badge variant="outline">{member.role}</Badge>

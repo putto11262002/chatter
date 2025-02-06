@@ -65,8 +65,11 @@ type ConnManager struct {
 	context context.Context
 	logger  *slog.Logger
 
-	onConnect    OnConnect
-	onDisconnect OnDisconnect
+	onUserConnected    func(string)
+	onUserDisconnected func(string)
+
+	onConnectionOpened func(string, int)
+	onConnectionClosed func(string, int)
 
 	receivedEvent chan *Event
 
@@ -98,15 +101,17 @@ func WithLogger(l *slog.Logger) ManagerOption {
 func NewConnManager(context context.Context, wg *sync.WaitGroup, logger *slog.Logger, opts ...ManagerOption) *ConnManager {
 
 	m := &ConnManager{
-		connWg:          wg,
-		conns:           make(map[string][]*Conn),
-		logger:          logger,
-		context:         context,
-		upgrader:        defaultUpgrader,
-		ReadStreamSize:  100,
-		WriteStreamSize: 100,
-		onConnect:       func(string, int) {},
-		onDisconnect:    func(string, int) {},
+		connWg:             wg,
+		conns:              make(map[string][]*Conn),
+		logger:             logger,
+		context:            context,
+		upgrader:           defaultUpgrader,
+		ReadStreamSize:     100,
+		WriteStreamSize:    100,
+		onUserConnected:    func(string) {},
+		onUserDisconnected: func(string) {},
+		onConnectionOpened: func(string, int) {},
+		onConnectionClosed: func(string, int) {},
 	}
 
 	for _, opt := range opts {
@@ -122,12 +127,27 @@ func (m *ConnManager) Receive() <-chan *Event {
 	return m.receivedEvent
 }
 
-func (m *ConnManager) OnConnect(f OnConnect) {
-	m.onConnect = f
+func (m *ConnManager) OnUserConnected(f func(string)) {
+	m.onUserConnected = f
 }
 
-func (m *ConnManager) OnDisconnect(f OnDisconnect) {
-	m.onDisconnect = f
+func (m *ConnManager) OnUserDisconnected(f func(string)) {
+	m.onUserDisconnected = f
+}
+
+func (m *ConnManager) OnConnectionOpened(f func(string, int)) {
+	m.onConnectionOpened = f
+}
+
+func (m *ConnManager) OnConnectionClosed(f func(string, int)) {
+	m.onConnectionClosed = f
+}
+
+func (m *ConnManager) IsUserConnected(username string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.conns[username]
+	return ok
 }
 
 func (m *ConnManager) Connect(username string, w http.ResponseWriter, r *http.Request) error {
@@ -167,9 +187,10 @@ func (m *ConnManager) Connect(username string, w http.ResponseWriter, r *http.Re
 		wsConn.writeLoop()
 	}()
 
-	if m.onConnect != nil {
-		m.onConnect(username, id)
+	if id == 1 {
+		m.onUserConnected(username)
 	}
+	m.onConnectionOpened(username, id)
 
 	return nil
 }
@@ -183,6 +204,8 @@ func (m *ConnManager) disconnect(username string, ids ...int) {
 	}
 
 	indices := make([]int, 0, len(ids))
+	userDisconnected := false
+
 	if len(ids) == 0 {
 		// disconnect all connections
 		for _, c := range conns {
@@ -190,10 +213,10 @@ func (m *ConnManager) disconnect(username string, ids ...int) {
 			indices = append(indices, c.id)
 		}
 		delete(m.conns, username)
+		userDisconnected = true
 	} else {
 		// remove specific connections
 		// remove from the end to avoid index shifting
-		indices := make([]int, 0, len(ids))
 		for i := len(conns) - 1; i >= 0; i-- {
 			if slices.Contains(ids, conns[i].id) {
 				conns[i].close()
@@ -205,15 +228,18 @@ func (m *ConnManager) disconnect(username string, ids ...int) {
 		}
 		if len(conns) == 0 {
 			delete(m.conns, username)
+			userDisconnected = true
 		} else {
 			m.conns[username] = conns
 		}
 	}
 	m.mu.Unlock()
+	if userDisconnected {
+		m.onUserDisconnected(username)
+	}
+
 	for _, id := range indices {
-		if m.onDisconnect != nil {
-			m.onDisconnect(username, id)
-		}
+		m.onConnectionClosed(username, id)
 	}
 }
 

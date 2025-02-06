@@ -24,7 +24,7 @@ export const createUserSlice: StateCreator<
     set((state) => ({
       users: {
         ...state.users,
-        [username]: { username, online, typing: null },
+        [username]: { ...state.users[username], username, online },
       },
     }));
   },
