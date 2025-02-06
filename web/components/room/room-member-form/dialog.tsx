@@ -23,8 +23,8 @@ export default function AddMemberDialog({ room }: { room: Room }) {
   const { data: user, isLoading: isLoadingUser } =
     useGetUserByUsername(username);
   const {
-    trigger: addMember,
-    isMutating: isAddingMember,
+    mutate: addMember,
+    isPending: isAddingMember,
     error: errorAddingMember,
   } = useAddRoomMember({ roomID: room.id });
 
@@ -45,8 +45,12 @@ export default function AddMemberDialog({ room }: { room: Room }) {
 
   const handleAddMember = async () => {
     if (!canAddMember) return;
-    await addMember({ username: user!.username, role: MemberRole.Member });
-    setOpenAddMemberDialog(false);
+    addMember(
+      { username: user!.username, role: MemberRole.Member },
+      {
+        onSuccess: () => setOpenAddMemberDialog(false),
+      }
+    );
   };
 
   return (

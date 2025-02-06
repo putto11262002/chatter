@@ -3,7 +3,7 @@ import ChatMessageInput from "./message-input";
 import MessageArea from "./message-area";
 import ChatHeader from "./chat-header";
 import { useRoom } from "@/hooks/chats";
-import { Loader2 } from "lucide-react";
+import { LoaderIcon } from "lucide-react";
 import { StrictMode } from "react";
 import { MessageScrollProvider } from "./message-scroll-context";
 
@@ -13,10 +13,18 @@ export default function ChatArea() {
 
   const { data: room } = useRoom(roomID);
 
+  if (!roomID) {
+    return (
+      <div className="h-full flex justify-center items-center py-4 text-sm">
+        <p>No room selected</p>
+      </div>
+    );
+  }
+
   if (!room) {
     return (
-      <div className="h-full flex justify-center items-center py-4">
-        <Loader2 className="w-4 h-4 animate-spin" />
+      <div className="h-full flex justify-center items-center py-4 gap-2 text-sm">
+        <LoaderIcon className="w-5 h-5 animate-spin" /> <p>Loading room...</p>
       </div>
     );
   }

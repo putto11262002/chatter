@@ -1,6 +1,6 @@
 import { Room, RoomMember } from "@/lib/types/chat";
 import {
-  Table,
+  Table as _Table,
   TableBody,
   TableCell,
   TableHead,
@@ -19,11 +19,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useRemoveRoomMember } from "@/hooks/chats";
 
-export default function Form({ room }: { room: Room }) {
+export default function Table({ room }: { room: Room }) {
   const { setOpenAddMemberDialog } = useRoomMemberFormContext();
   return (
     <div className="grid gap-4">
-      <Table>
+      <_Table>
         <TableHeader className="">
           <TableRow>
             <TableHead>Username</TableHead>
@@ -48,7 +48,7 @@ export default function Form({ room }: { room: Room }) {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </_Table>
       <div className="flex justify-end">
         <Button onClick={() => setOpenAddMemberDialog(true)}>Add Member</Button>
       </div>
@@ -57,7 +57,7 @@ export default function Form({ room }: { room: Room }) {
 }
 
 function RoomMemberActionsDropdownMenu({ member }: { member: RoomMember }) {
-  const { trigger: removeMember, isMutating: isRemovingMember } =
+  const { mutate: removeMember, isPending: isRemovingMember } =
     useRemoveRoomMember({
       roomID: member.room_id,
     });

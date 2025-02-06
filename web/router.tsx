@@ -12,7 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WSProvider } from "./real-time/context";
 import { storeEventHandlers } from "./real-time/handlers";
 
-const queryClient = new QueryClient();
+export const queryClient = new QueryClient();
 
 export const router = createBrowserRouter([
   {

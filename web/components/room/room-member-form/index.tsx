@@ -1,12 +1,12 @@
 import { Room } from "@/lib/types/chat";
 import { RoomMemberContextProvider } from "./context";
-import Form from "./form";
+import Table from "./table";
 import AddMemberDialog from "./dialog";
 
 export default function RoomMemberForm({ room }: { room: Room }) {
   return (
     <RoomMemberContextProvider>
-      <Form room={room} />
+      <Table room={room} />
       <AddMemberDialog room={room} />
     </RoomMemberContextProvider>
   );

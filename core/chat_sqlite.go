@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,12 +41,14 @@ func (s *SQLiteChatStore) CreateRoom(ctx context.Context, name string, ownerUser
 	id := uuid.New().String()
 	defer tx.Rollback()
 
-	query := `INSERT INTO rooms (id, name, last_message_sent_at, last_message_sent)
-	          VALUES (@id, @name, @last_message_sent_at, @last_message_sent)`
+	query := `INSERT INTO rooms (id, name, last_message_sent_at, last_message_sent, last_message_sent_data)
+	          VALUES (@id, @name, @last_message_sent_at, @last_message_sent, @last_message_sent_data)`
 	_, err = tx.ExecContext(ctx, query,
 		sql.Named("id", id), sql.Named("name", name),
 		sql.Named("last_message_sent_at", time.Time{}),
-		sql.Named("last_message_sent", 0))
+		sql.Named("last_message_sent", 0),
+		sql.Named("last_message_sent_data", ""),
+	)
 	if err != nil {
 		return "", fmt.Errorf("ExecContext(insert room): %w", err)
 	}
@@ -133,7 +136,7 @@ func (s *SQLiteChatStore) RemoveRoomMember(ctx context.Context, roomID, username
 func (s *SQLiteChatStore) GetRoomByID(ctx context.Context, roomID string) (*Room, error) {
 
 	query := `
-		SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent, 
+		SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent, last_message_sent_data,
 		ru.username, ru.role, ru.last_message_read FROM rooms AS r 
 		INNER JOIN room_members AS ru ON r.id = ru.room_id 
 		WHERE r.id = @id`
@@ -148,6 +151,7 @@ func (s *SQLiteChatStore) GetRoomByID(ctx context.Context, roomID string) (*Room
 	var name string
 	var lastMessageSentAt time.Time
 	var lastMessageSent int
+	var lastMessageSentData string
 
 	members := make([]RoomMember, 0, 2)
 
@@ -155,7 +159,7 @@ func (s *SQLiteChatStore) GetRoomByID(ctx context.Context, roomID string) (*Room
 		var member RoomMember
 		if err := row.Scan(
 			&id, &name, &lastMessageSentAt,
-			&lastMessageSent,
+			&lastMessageSent, &lastMessageSentData,
 			&member.Username, &member.Role, &member.LastMessageRead,
 		); err != nil {
 			break
@@ -173,11 +177,12 @@ func (s *SQLiteChatStore) GetRoomByID(ctx context.Context, roomID string) (*Room
 	}
 
 	room := Room{
-		ID:                id,
-		Name:              name,
-		LastMessageSentAt: lastMessageSentAt,
-		LastMessageSent:   lastMessageSent,
-		Members:           members,
+		ID:                  id,
+		Name:                name,
+		LastMessageSentAt:   lastMessageSentAt,
+		LastMessageSent:     lastMessageSent,
+		LastMessageSentData: lastMessageSentData,
+		Members:             members,
 	}
 
 	return &room, nil
@@ -217,18 +222,20 @@ func (s *SQLiteChatStore) GetUserRooms(ctx context.Context, user string, offset,
 
 	query := `
 	WITH r as (
-	    SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent
+	    SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent, r.last_message_sent_data
 	    FROM room_members as rm
 	    INNER JOIN rooms as r ON rm.room_id = r.id
 	    WHERE rm.username = @username
 	    ORDER BY r.last_message_sent_at DESC, r.name ASC
 	    LIMIT @limit OFFSET @offset
 	)
-	SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent,
+	SELECT r.id, r.name, r.last_message_sent_at, r.last_message_sent, r.last_message_sent_data,
 	rm.username, rm.role,  rm.last_message_read
 	FROM r 
 	INNER JOIN room_members as rm
-	ON r.id = rm.room_id`
+	ON r.id = rm.room_id
+	ORDER BY r.last_message_sent_at DESC, r.name ASC
+	`
 
 	if litmit == 0 {
 		litmit = 20
@@ -246,14 +253,14 @@ func (s *SQLiteChatStore) GetUserRooms(ctx context.Context, user string, offset,
 
 	roomMap := make(map[string]*Room)
 	var (
-		id, name, username               string
-		lastMessageSentAt                time.Time
-		lastMessageSent, lastMessageRead int
-		role                             MemberRole
+		id, name, username, lastMessageSentData string
+		lastMessageSentAt                       time.Time
+		lastMessageSent, lastMessageRead        int
+		role                                    MemberRole
 	)
 	for rows.Next() {
 		if err := rows.Scan(&id, &name, &lastMessageSentAt,
-			&lastMessageSent, &username, &role, &lastMessageRead); err != nil {
+			&lastMessageSent, &lastMessageSentData, &username, &role, &lastMessageRead); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
 			}
@@ -263,10 +270,11 @@ func (s *SQLiteChatStore) GetUserRooms(ctx context.Context, user string, offset,
 		room, ok := roomMap[id]
 		if !ok {
 			room = &Room{
-				ID:                id,
-				Name:              name,
-				LastMessageSentAt: lastMessageSentAt,
-				LastMessageSent:   lastMessageSent,
+				ID:                  id,
+				Name:                name,
+				LastMessageSentAt:   lastMessageSentAt,
+				LastMessageSent:     lastMessageSent,
+				LastMessageSentData: lastMessageSentData,
 			}
 			roomMap[id] = room
 		}
@@ -285,6 +293,14 @@ func (s *SQLiteChatStore) GetUserRooms(ctx context.Context, user string, offset,
 	for _, r := range roomMap {
 		rooms = append(rooms, *r)
 	}
+	slices.SortFunc(rooms, func(i, j Room) int {
+		lastMessageSentCmp := j.LastMessageSentAt.Compare(i.LastMessageSentAt)
+		if lastMessageSentCmp != 0 {
+			return lastMessageSentCmp
+		}
+		return strings.Compare(i.Name, j.Name)
+
+	})
 
 	return rooms, nil
 
@@ -412,13 +428,16 @@ func (s *SQLiteChatStore) SendMessageToRoom(ctx context.Context, message Message
 	query = `
 	UPDATE rooms SET 
 	last_message_sent = @last_message_sent,
-	last_message_sent_at = @last_message_sent_at
+	last_message_sent_at = @last_message_sent_at,
+	last_message_sent_data = @last_message_sent_data
 	WHERE id = @room_id
 	`
 	_, err = tx.ExecContext(ctx, query,
 		sql.Named("room_id", message.RoomID),
 		sql.Named("last_message_sent", id),
-		sql.Named("last_message_sent_at", sentAt))
+		sql.Named("last_message_sent_at", sentAt),
+		sql.Named("last_message_sent_data", message.Data),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("ExectContext(update room): %w", err)
 	}

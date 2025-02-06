@@ -6,12 +6,17 @@ import {
   typingBodySchema,
 } from "./data";
 import { EventHandler } from "./context";
+import { queryClient } from "@/router";
 
 const onMessage: EventHandler = (packet) => {
   const message = messageBodySchema.parse(packet.payload);
 
   useRealtimeStore.getState().addMessage(message.room_id, message);
-  // if the message belongs to the user
+  // if the message belongs to the user set the new read pointer for the user
+
+  // update the room last message sent
+  queryClient.invalidateQueries({ queryKey: ["room", message.room_id] });
+  queryClient.invalidateQueries({ queryKey: ["users", "me", "rooms"] });
 };
 
 const onTyping: EventHandler = (e) => {

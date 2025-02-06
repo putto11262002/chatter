@@ -48,11 +48,12 @@ type RoomMember struct {
 
 // Room represents a chat room.
 type Room struct {
-	ID                string       `json:"id"`
-	Members           []RoomMember `json:"members"`
-	Name              string       `json:"name"`
-	LastMessageSentAt time.Time    `json:"last_message_sent_at"`
-	LastMessageSent   int          `json:"last_message_sent"`
+	ID                  string       `json:"id"`
+	Members             []RoomMember `json:"members"`
+	Name                string       `json:"name"`
+	LastMessageSentAt   time.Time    `json:"last_message_sent_at"`
+	LastMessageSent     int          `json:"last_message_sent"`
+	LastMessageSentData string       `json:"last_message_sent_data"`
 }
 
 // RoomSummary represents a summary of a chat room from the perspective of a member.

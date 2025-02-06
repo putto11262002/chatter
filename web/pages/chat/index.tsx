@@ -10,6 +10,10 @@ import { useCreateRoomDialog } from "@/components/create-room-dialog";
 import { useSignout } from "@/hooks/auth";
 import { useWS } from "@/real-time/context";
 import { ReadyState } from "@/real-time/ws";
+import { useRealtimeStore } from "@/store/real-time";
+import { formatDistance } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { RoomList } from "./rooms/list";
 
 export default function ChatPage() {
   const { setOpen } = useCreateRoomDialog();
@@ -18,16 +22,17 @@ export default function ChatPage() {
   const params = useParams();
   const roomID = params.roomID;
   const { readyState } = useWS();
+  const realtimeRoomInfo = useRealtimeStore((state) => state.rooms);
 
   return (
     <main className="h-screen w-full">
-      <div className="grid grid-cols-[20%_80%] h-screen overflow-hidden">
-        <div className="h-full flex flex-col border-r">
+      <div className="grid grid-cols-[20%_80%] h-screen ">
+        <div className="h-full flex flex-col border-r overflow-hidden">
           <div className="flex-0 py-2 px-2 border-b flex justify-between items-center">
             <Button onClick={() => setOpen(true)} variant="outline" size="icon">
               <MessageCirclePlus className="w-6 h-6" />
             </Button>
-            <div className="px-2 px-2">
+            <div className="px-2 ">
               <div
                 className={cn(
                   "rounded-full h-4 w-4 text-xs font-medium",
@@ -37,34 +42,9 @@ export default function ChatPage() {
               ></div>
             </div>
           </div>
-          <div className="grow">
-            {error ? (
-              <Alert message={error.message} />
-            ) : isLoading || !data ? (
-              <div className="grid gap-1">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <div className="grid">
-                {data.map((room, index) => {
-                  return (
-                    <Link key={index} to={`/${room.id}`}>
-                      <div
-                        key={index}
-                        className={cn(
-                          "h-12 px-3 border-b hover:bg-accent cursor-pointer flex gap-3 items-center",
-                          roomID === room.id && "bg-accent"
-                        )}
-                      >
-                        <p className="font-medium grow">{room.name}</p>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+
+          <div className="grow overflow-hidden">
+            <RoomList />
           </div>
           <div className="flex-0 py-2 px-2 border-t h-14 flex items-center">
             <Button

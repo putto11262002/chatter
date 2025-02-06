@@ -1,4 +1,3 @@
-import useSWRMutation from "swr/mutation";
 import useSWRInfinite from "swr/infinite";
 import {
   AddRoomMemberPayload,
@@ -8,51 +7,77 @@ import {
   Room,
 } from "@/lib/types/chat";
 import { api } from "@/lib/api";
-import useSWR, { mutate, useSWRConfig } from "swr";
-import { useEffect, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import useSWR from "swr";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 export const useCreateRoom = () => {
-  const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    "/rooms",
-    async (url: string, { arg }: { arg: CreateRoomPayload }) => {
-      const res = await api.post(url, arg);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (arg: CreateRoomPayload) => {
+      const res = await api.post("/rooms", arg);
       return res.data as CreateRoomResponse;
     },
-    {
-      onSuccess: () => mutate("/users/me/rooms"),
-    }
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users", "me", "rooms"] });
+    },
+  });
 };
 
 export const useAddRoomMember = ({ roomID }: { roomID: string }) => {
-  return useSWRMutation(
-    `/rooms/${roomID}`,
-    async (_: string, { arg }: { arg: AddRoomMemberPayload }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (arg: AddRoomMemberPayload) => {
       await api.post(`/rooms/${roomID}/members`, arg);
-    }
-  );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rooms", roomID] });
+    },
+  });
 };
 
 export const useRemoveRoomMember = ({ roomID }: { roomID: string }) => {
-  return useSWRMutation(
-    `/rooms/${roomID}`,
-    async (_: string, { arg }: { arg: { username: string } }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (arg: { username: string }) => {
       await api.delete(`/rooms/${roomID}/members/${arg.username}`);
-    }
-  );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rooms", roomID] });
+    },
+  });
 };
 
 export const useRoom = (roomID?: string | null) => {
-  return useSWR(
-    roomID ? `/rooms/${roomID}` : false,
-    async (url) => {
-      const res = await api.get(url);
+  return useQuery({
+    queryKey: ["rooms", roomID],
+    queryFn: async () => {
+      const res = await api.get(`/rooms/${roomID}`);
       return res.data as Room;
     },
-    {}
-  );
+  });
+};
+
+export const useInfiniteMyRooms = () => {
+  return useInfiniteQuery({
+    queryKey: ["users", "me", "rooms"],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const res = await api.get(
+        `/users/me/rooms?offset=${pageParam * 20}&limit=20`
+      );
+      return res.data as Room[];
+    },
+    getNextPageParam: (lastPage, _, lastPageParam) => {
+      if (lastPage.length < 20) return undefined;
+      return lastPageParam + 1;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 };
 
 export const useMyRooms = () => {

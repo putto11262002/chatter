@@ -22,20 +22,24 @@ import { useForm } from "react-hook-form";
 import { CreateRoomPayload, createRoomSchema } from "@/lib/types/chat";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCreateRoomDialog } from "./context";
+import { useNavigate } from "react-router-dom";
 
 export default function CreateRoomDialog() {
-  const { trigger, isMutating, error: createRoomError } = useCreateRoom();
+  const { mutate, isPending, error: createRoomError } = useCreateRoom();
   const { open, setOpen } = useCreateRoomDialog();
+  const navigate = useNavigate();
   const form = useForm<CreateRoomPayload>({
     resolver: zodResolver(createRoomSchema),
   });
 
   const handleSubmit = form.handleSubmit(async (data) => {
-    await trigger(data);
-    if (!createRoomError) {
-      form.reset();
-      setOpen(false);
-    }
+    mutate(data, {
+      onSuccess: (res) => {
+        form.reset();
+        setOpen(false);
+        navigate(`/${res.id}`);
+      },
+    });
   });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -65,7 +69,7 @@ export default function CreateRoomDialog() {
               />
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isMutating}>
+              <Button type="submit" disabled={isPending}>
                 Let's Chat!
               </Button>
             </DialogFooter>

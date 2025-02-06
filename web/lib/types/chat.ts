@@ -17,7 +17,8 @@ export type Room = {
   members: RoomMember[];
   name: string;
   last_message_sent_at: string;
-  last_message_sent: string;
+  last_message_sent: number;
+  last_message_sent_data: string;
 };
 
 export enum MessageType {
