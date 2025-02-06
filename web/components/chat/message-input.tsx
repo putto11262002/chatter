@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { Textarea } from "../ui/textarea";
 import { MessageType } from "@/lib/types/chat";
 import { useSendMessage, useTyping } from "@/real-time/hooks";
-import { useRealtimeStore } from "@/store/real-time";
 
 export default function ChatMessageInput({ roomID }: { roomID: string }) {
   const timeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -16,6 +15,7 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
   const { send } = useSendMessage();
   const { stopTyping, startTyping } = useTyping();
   const [typing, setTyping] = useState(false);
+  const [rows, setRows] = useState(1);
 
   useEffect(() => {
     if (!typing) {
@@ -23,28 +23,25 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
     }
 
     startTyping(roomID);
-    const timeout = setTimeout(() => {
+    timeRef.current = setTimeout(() => {
       setTyping(false);
       stopTyping(roomID);
-    }, 5000);
+    }, 1000);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      if (timeRef.current) {
+        clearTimeout(timeRef.current);
+      }
+    };
   }, [typing, roomID]);
 
   const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
     setTyping(true);
-    if (textareaRef.current) {
-      // Reset height to compute the new scrollHeight correctly
-      textareaRef.current.style.height = "auto";
-
-      const maxHeight = 100;
-      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
-
-      textareaRef.current.style.height = `${newHeight}px`;
-      // If content exceeds the max height, show a scrollbar
-      textareaRef.current.style.overflowY =
-        textareaRef.current.scrollHeight > maxHeight ? "auto" : "hidden";
-    }
+    const newRows = Math.min(
+      Math.max(e.currentTarget.value.split("\n").length, 1),
+      5
+    );
+    setRows(newRows);
   };
 
   // Handle keydown to submit on Enter unless Shift is held down
@@ -69,8 +66,13 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
     form.reset({ message: "" });
 
     // Reset the height back to auto after sending
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    setRows(1);
+    if (timeRef.current) {
+      clearTimeout(timeRef.current);
+    }
+    if (typing) {
+      setTyping(false);
+      stopTyping(roomID);
     }
   };
 
@@ -92,7 +94,7 @@ export default function ChatMessageInput({ roomID }: { roomID: string }) {
                 field.onChange(e);
               }}
               ref={textareaRef}
-              rows={1}
+              rows={rows}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
             />
