@@ -20,7 +20,9 @@ export default function Avatar({
         size === "md" && "h-9 w-9"
       )}
     >
-      <div className="w-2.5 h-2.5 rounded-full bg-green-400 absolute right-0 top-0"></div>
+      {online && (
+        <div className="w-2.5 h-2.5 rounded-full bg-green-400 absolute right-0 top-0"></div>
+      )}
       {firstChar}
     </div>
   );

@@ -1,21 +1,14 @@
-import { useMyRooms } from "@/hooks/chats";
-import { Link, useParams } from "react-router-dom";
-import Alert from "@/components/alert";
+import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
-import ChatArea from "@/components/chat/chat-area";
+import ChatArea from "./components/chat-area";
 import { Button } from "@/components/ui/button";
 import { LogOut, MessageCirclePlus } from "lucide-react";
-import { useCreateRoomDialog } from "@/components/create-room-dialog";
-import { useSignout } from "@/hooks/auth";
-import { useWS } from "@/real-time/context";
-import { ReadyState } from "@/real-time/ws";
-import { useRealtimeStore } from "@/store/real-time";
-import { formatDistance } from "date-fns";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { RoomList } from "./rooms/list";
+import { useCreateRoomDialog } from "./components/create-room-dialog";
+import { useSignout } from "@/hooks/react-query/auth";
+import { useWS } from "@/context/ws";
+import { ReadyState } from "@/lib/ws";
+import { RoomList } from "./components/room-list";
 import { useEffect, useState } from "react";
-import resolveConfig from "tailwindcss/resolveConfig";
 
 const useMediaQuery = (query: string) => {
   const mediaQuery = window.matchMedia(query);
@@ -32,11 +25,12 @@ const useMediaQuery = (query: string) => {
 
 export default function ChatPage() {
   const { setOpen } = useCreateRoomDialog();
-  const { trigger: signout, isMutating: isSigningOut } = useSignout();
+  const { mutate: signout, isPending: isSigningOut } = useSignout();
   const params = useParams();
   const roomID = params.roomID;
   const { readyState } = useWS();
   const isSmallScreen = useMediaQuery(`(max-width: 1024px)`);
+  console.log("rednering chat page");
 
   return (
     <main className="h-screen w-full">
