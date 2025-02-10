@@ -3,14 +3,11 @@ import { ReadyState } from "../lib/ws";
 import { useWS } from "@/context/ws";
 import {
   EventName,
-  IsOnlineBody,
   MessageBody,
   TypingBody,
   typingBodySchema,
 } from "@/types/ws";
 import { useRealtimeStore } from "@/stores/real-time";
-import { UserRealtimeInfo } from "@/stores/user";
-import { useRef } from "react";
 
 export const useSendMessage = () => {
   const { ws } = useWS();

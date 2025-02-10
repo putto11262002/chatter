@@ -68,7 +68,6 @@ func (em *EventRouter) Listen() {
 		for {
 			select {
 			case e := <-em.transport.Receive():
-				em.logger.Debug(fmt.Sprintf("received: %v", e))
 				if handlers, ok := em.listeners[e.Type]; ok {
 					go func() {
 						if err := handlers(em.ctx, e); err != nil {

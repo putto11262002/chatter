@@ -25,12 +25,11 @@ func (c *Conn) close() {
 	close(c.writeStream)
 }
 func (c *Conn) readLoop() {
-	c.logger.Info("read loop started")
+	c.logger.Debug("read loop started")
 	defer func() {
-		// TODO: do i need try send?
 		c.notifyDisconnect()
 		c.conn.Close()
-		c.logger.Info("read loop stoped")
+		c.logger.Debug("read loop stoped")
 	}()
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -42,7 +41,7 @@ func (c *Conn) readLoop() {
 		format, r, err := c.conn.NextReader()
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				c.logger.Info(fmt.Sprintf("expected close: %v", err))
+				c.logger.Debug(fmt.Sprintf("expected close: %v", err))
 				return
 
 			}
@@ -65,22 +64,20 @@ func (c *Conn) readLoop() {
 		}
 		event.Dispatcher = c.username
 
-		c.logger.Debug(event.String())
-
 		c.readStream <- &event
 	}
 
 }
 
 func (c *Conn) writeLoop() {
-	c.logger.Info("write loop started")
+	c.logger.Debug("write loop started")
 	var err error
 	defer func() {
 		c.ticker.Stop()
 		if err != nil {
 			c.conn.Close()
 		}
-		c.logger.Info("write loop stoped")
+		c.logger.Debug("write loop stoped")
 	}()
 
 	for {
@@ -88,30 +85,27 @@ func (c *Conn) writeLoop() {
 		case e, ok := <-c.writeStream:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				c.logger.Info("write stream closed")
 				c.conn.WriteMessage(websocket.CloseMessage,
 					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-				c.logger.Info("sending close message")
+				c.logger.Debug("sending close message")
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				c.logger.Error(fmt.Sprintf("getting next writer: %v", err))
+				c.logger.Error(err.Error())
 				return
 			}
 			if err := EncodeEvent(w, e); err != nil {
 				c.logger.Error(err.Error())
-
 			}
 			w.Close()
 		case <-c.context.Done():
-			c.logger.Info("context done")
+			c.logger.Debug("context done")
 			return
 		case <-c.ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err = c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				c.logger.Error(fmt.Sprintf("writing ping: %v", err))
 				return
 			}
 
