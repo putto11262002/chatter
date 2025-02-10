@@ -157,7 +157,9 @@ type ChatStore interface {
 	GetRoomMembers(ctx context.Context, roomID string) ([]RoomMember, error)
 
 	// GetFriends returns a list of friends for the given user.
-	// A friend is a user that has a private chat room with the user
-	// or is a member of the same group chat room.
+	// A friend is a user that are member of at least one common chat room.
 	GetFriends(ctx context.Context, username string) ([]string, error)
+
+	// AreFriends returns true if the two users are friends.
+	AreFriends(ctx context.Context, user1, user2 string) (bool, error)
 }

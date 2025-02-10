@@ -643,3 +643,22 @@ func (s *SQLiteChatStore) GetFriends(ctx context.Context, username string) ([]st
 
 	return friends, nil
 }
+
+func (s *SQLiteChatStore) AreFriends(ctx context.Context, username1, username2 string) (bool, error) {
+	query := `
+	SELECT count(*) 
+	FROM room_members AS rm1
+	INNER JOIN room_members AS rm2 ON rm1.room_id = rm2.room_id
+	WHERE rm1.username = @username1 AND rm2.username = @username2
+	`
+	row, err := s.db.QueryContext(ctx, query, sql.Named("username1", username1), sql.Named("username2", username2))
+	if err != nil {
+		return false, fmt.Errorf("QueryContext: %w", err)
+	}
+	defer row.Close()
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return false, fmt.Errorf("row.Scan: %w", err)
+	}
+	return count > 0, nil
+}

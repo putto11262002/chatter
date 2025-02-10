@@ -131,10 +131,28 @@ func (app *App) TypingHandler(ctx context.Context, e *core.Event) error {
 		usernames = append(usernames, member.Username)
 	}
 
-	if err := app.eventRouter.EmitTo(TypingEvent, typing, usernames...); err != nil {
-		return err
+	return app.eventRouter.EmitTo(TypingEvent, typing, usernames...)
+}
+
+func (app *App) IsOnlineHandler(ctx context.Context, e *core.Event) error {
+	var isOnline IsOnlineEventPayload
+	if err := json.Unmarshal(e.Payload, &isOnline); err != nil {
+		return fmt.Errorf("Unmarshal: %w", err)
 	}
 
-	return nil
+	ok, err := app.chatStore.AreFriends(ctx, isOnline.Username, e.Dispatcher)
+	if err != nil {
+		return fmt.Errorf("AreFriends: %w", err)
+	}
+	if !ok {
+		return nil
+	}
+
+	isConnected := app.wsManager.IsUserConnected(isOnline.Username)
+	if !isConnected {
+		return nil
+	}
+	payload := OnlineEventPayload{Username: isOnline.Username}
+	return app.eventRouter.EmitTo(OnlineEvent, payload, e.Dispatcher)
 
 }
