@@ -12,3 +12,12 @@ dev_server:
 
 dev_client:
 	@bun dev
+
+build_client: 
+	@bun run build
+
+build_server:
+	@go build -o bin/chatter main.go
+
+build: build_client build_server
+

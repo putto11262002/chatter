@@ -1,0 +1,8 @@
+auth:
+  secret: secret
+allowedOrigins:
+  - http://localhost:3000
+  - http://localhost:3001
+sqlite:
+  file: chatter.db
+  migration: ./migrationss

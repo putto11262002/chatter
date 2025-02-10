@@ -54,10 +54,6 @@ func (g *AutoIncrementConnIDGenerator) Generate(_ *http.Request, _ *websocket.Co
 	return int(g.counter), nil
 }
 
-type OnConnect func(string, int)
-
-type OnDisconnect func(string, int)
-
 type ConnManager struct {
 	conns   map[string][]*Conn
 	mu      sync.RWMutex
@@ -65,11 +61,11 @@ type ConnManager struct {
 	context context.Context
 	logger  *slog.Logger
 
-	onUserConnected    func(string)
-	onUserDisconnected func(string)
+	onUserConnected    func(context.Context, string)
+	onUserDisconnected func(context.Context, string)
 
-	onConnectionOpened func(string, int)
-	onConnectionClosed func(string, int)
+	onConnectionOpened func(context.Context, string, int)
+	onConnectionClosed func(context.Context, string, int)
 
 	receivedEvent chan *Event
 
@@ -98,20 +94,20 @@ func WithLogger(l *slog.Logger) ManagerOption {
 	}
 }
 
-func NewConnManager(context context.Context, wg *sync.WaitGroup, logger *slog.Logger, opts ...ManagerOption) *ConnManager {
+func NewConnManager(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, opts ...ManagerOption) *ConnManager {
 
 	m := &ConnManager{
 		connWg:             wg,
 		conns:              make(map[string][]*Conn),
 		logger:             logger,
-		context:            context,
+		context:            ctx,
 		upgrader:           defaultUpgrader,
 		ReadStreamSize:     100,
 		WriteStreamSize:    100,
-		onUserConnected:    func(string) {},
-		onUserDisconnected: func(string) {},
-		onConnectionOpened: func(string, int) {},
-		onConnectionClosed: func(string, int) {},
+		onUserConnected:    func(context.Context, string) {},
+		onUserDisconnected: func(context.Context, string) {},
+		onConnectionOpened: func(context.Context, string, int) {},
+		onConnectionClosed: func(context.Context, string, int) {},
 	}
 
 	for _, opt := range opts {
@@ -127,19 +123,19 @@ func (m *ConnManager) Receive() <-chan *Event {
 	return m.receivedEvent
 }
 
-func (m *ConnManager) OnUserConnected(f func(string)) {
+func (m *ConnManager) OnUserConnected(f func(context.Context, string)) {
 	m.onUserConnected = f
 }
 
-func (m *ConnManager) OnUserDisconnected(f func(string)) {
+func (m *ConnManager) OnUserDisconnected(f func(context.Context, string)) {
 	m.onUserDisconnected = f
 }
 
-func (m *ConnManager) OnConnectionOpened(f func(string, int)) {
+func (m *ConnManager) OnConnectionOpened(f func(context.Context, string, int)) {
 	m.onConnectionOpened = f
 }
 
-func (m *ConnManager) OnConnectionClosed(f func(string, int)) {
+func (m *ConnManager) OnConnectionClosed(f func(context.Context, string, int)) {
 	m.onConnectionClosed = f
 }
 
@@ -188,9 +184,9 @@ func (m *ConnManager) Connect(username string, w http.ResponseWriter, r *http.Re
 	}()
 
 	if id == 1 {
-		m.onUserConnected(username)
+		m.onUserConnected(m.context, username)
 	}
-	m.onConnectionOpened(username, id)
+	m.onConnectionOpened(m.context, username, id)
 
 	return nil
 }
@@ -235,11 +231,11 @@ func (m *ConnManager) disconnect(username string, ids ...int) {
 	}
 	m.mu.Unlock()
 	if userDisconnected {
-		m.onUserDisconnected(username)
+		m.onUserDisconnected(m.context, username)
 	}
 
 	for _, id := range indices {
-		m.onConnectionClosed(username, id)
+		m.onConnectionClosed(m.context, username, id)
 	}
 }
 

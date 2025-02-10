@@ -47,6 +47,8 @@ type EventRouter struct {
 	ctx       context.Context
 	transport EventTransport
 	logger    *slog.Logger
+	wg        sync.WaitGroup
+	exit      chan struct{}
 }
 
 func NewEventRouter(ctx context.Context, logger *slog.Logger, transport EventTransport) *EventRouter {
@@ -55,25 +57,46 @@ func NewEventRouter(ctx context.Context, logger *slog.Logger, transport EventTra
 		ctx:       ctx,
 		transport: transport,
 		logger:    logger,
+		exit:      make(chan struct{}),
 	}
 }
 
-func (em *EventRouter) Listen(wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case e := <-em.transport.Receive():
-			em.logger.Debug(fmt.Sprintf("received: %v", e))
-			if handlers, ok := em.listeners[e.Type]; ok {
-				go func() {
-					if err := handlers(em.ctx, e); err != nil {
-						em.logger.Error(fmt.Sprintf("%s handler: %s", e.Type, err))
-					}
-				}()
+func (em *EventRouter) Listen() {
+	em.wg.Add(1)
+	go func() {
+		defer em.wg.Done()
+		for {
+			select {
+			case e := <-em.transport.Receive():
+				em.logger.Debug(fmt.Sprintf("received: %v", e))
+				if handlers, ok := em.listeners[e.Type]; ok {
+					go func() {
+						if err := handlers(em.ctx, e); err != nil {
+							em.logger.Error(fmt.Sprintf("%s handler: %s", e.Type, err))
+						}
+					}()
+				}
+			case <-em.exit:
+				return
+
 			}
 
 		}
+	}()
+}
 
+func (em *EventRouter) Close(ctx context.Context) {
+	close(em.exit)
+	done := make(chan struct{})
+	go func() {
+		em.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return
+	case <-ctx.Done():
+		return
 	}
 }
 

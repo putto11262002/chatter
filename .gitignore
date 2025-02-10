@@ -33,3 +33,5 @@ bin
 *.db
 
 tmp
+
+coverage.out*

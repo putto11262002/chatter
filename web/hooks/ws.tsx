@@ -68,7 +68,9 @@ export const useRealtimeUserInfo = () => {
           username,
         };
         ws.sendPacket({ type: EventName.IsOnline, payload });
-        return { username, typing: null, online: false };
+        const placeholder = { username, typing: null, online: false };
+        useRealtimeStore.getState().setUser(username, placeholder);
+        return placeholder;
       }
       return realtimeInfo;
     },

@@ -657,8 +657,10 @@ func (s *SQLiteChatStore) AreFriends(ctx context.Context, username1, username2 s
 	}
 	defer row.Close()
 	var count int
-	if err := row.Scan(&count); err != nil {
-		return false, fmt.Errorf("row.Scan: %w", err)
+	if row.Next() {
+		if err := row.Scan(&count); err != nil {
+			return false, fmt.Errorf("row.Scan: %w", err)
+		}
 	}
 	return count > 0, nil
 }

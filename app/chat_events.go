@@ -150,9 +150,11 @@ func (app *App) IsOnlineHandler(ctx context.Context, e *core.Event) error {
 
 	isConnected := app.wsManager.IsUserConnected(isOnline.Username)
 	if !isConnected {
-		return nil
+		payload := OfflineEventPayload{Username: isOnline.Username}
+		return app.eventRouter.EmitTo(OfflineEvent, payload, e.Dispatcher)
+	} else {
+		payload := OnlineEventPayload{Username: isOnline.Username}
+		return app.eventRouter.EmitTo(OnlineEvent, payload, e.Dispatcher)
 	}
-	payload := OnlineEventPayload{Username: isOnline.Username}
-	return app.eventRouter.EmitTo(OnlineEvent, payload, e.Dispatcher)
 
 }
