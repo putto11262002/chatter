@@ -10,6 +10,7 @@ import {
 } from "@/types/ws";
 import { useRealtimeStore } from "@/stores/real-time";
 import { UserRealtimeInfo } from "@/stores/user";
+import { useRef } from "react";
 
 export const useSendMessage = () => {
   const { ws } = useWS();
@@ -46,33 +47,5 @@ export const useTyping = () => {
     available: readyState === ReadyState.Open,
     startTyping: (roomID: string) => emitTyping(roomID, true),
     stopTyping: (roomID: string) => emitTyping(roomID, false),
-  };
-};
-
-export const useRealtimeUserInfo = () => {
-  const users = useRealtimeStore((state) => state.users);
-  const { ws } = useWS();
-  const session = useSession();
-  return {
-    get: (username: string): UserRealtimeInfo => {
-      if (username === session.username) {
-        return {
-          username: session.username,
-          online: true,
-          typing: users[username]?.typing || null,
-        };
-      }
-      const realtimeInfo = users[username];
-      if (!realtimeInfo) {
-        const payload: IsOnlineBody = {
-          username,
-        };
-        ws.sendPacket({ type: EventName.IsOnline, payload });
-        const placeholder = { username, typing: null, online: false };
-        useRealtimeStore.getState().setUser(username, placeholder);
-        return placeholder;
-      }
-      return realtimeInfo;
-    },
   };
 };

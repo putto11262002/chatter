@@ -1,7 +1,7 @@
 import RoomMemberForm from "@/pages/room-settings/room-member-form";
 import RoomProfileForm from "./room-profile-form";
 import { Button } from "@/components/ui/button";
-import { useRoom } from "@/hooks/react-query/chats"
+import { useRoom } from "@/hooks/react-query/chats";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 

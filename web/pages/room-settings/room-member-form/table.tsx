@@ -18,12 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRemoveRoomMember } from "@/hooks/react-query/chats";
-import { useRealtimeUserInfo } from "@/hooks/ws";
 import { cn } from "@/lib/utils";
+import { useRealtimeStore } from "@/stores/real-time";
 
 export default function Table({ room }: { room: Room }) {
   const { setOpenAddMemberDialog } = useRoomMemberFormContext();
-  const { get } = useRealtimeUserInfo();
+  const realtimeUserInfo = useRealtimeStore((state) => state.users);
   return (
     <div className="grid gap-4">
       <_Table>
@@ -48,12 +48,14 @@ export default function Table({ room }: { room: Room }) {
                   <div
                     className={cn(
                       "px-2 py-1 rounded-md text-xs font-medium",
-                      get(member.username).online
+                      realtimeUserInfo[member.username]?.online
                         ? "bg-green-200 text-green-600 border-green-600"
                         : "bg-red-200 border-red-600 text-red-600"
                     )}
                   >
-                    {get(member.username).online ? "online" : "offline"}
+                    {realtimeUserInfo[member.username]?.online
+                      ? "online"
+                      : "offline"}
                   </div>
                 </div>
               </TableCell>
