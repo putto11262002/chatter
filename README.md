@@ -11,9 +11,7 @@ The application is constructed using a React frontend and a Go backend, strategi
 The REST API handles non-real-time operations such as authentication, user profile management, and message history retrieval.
 In contrast, WebSockets power the real-time communication layer, enabling instant message transmission, user status updates, and interactive features like typing indicators.
 
-At the core of the system is an event-driven WebSocket implementation where each message is treated as a discrete event.
-Custom event handlers are designed to process specific message types, allowing for modular and extensible real-time communication.
-This approach enables complex interaction scenarios to be managed efficiently, with each event triggering targeted handlers that respond to different communication states and user interactions.
+At the core of the system is an event-driven WebSocket implementation where bidirectional event propagation occurs between client and server endpoints. Each client-originated event (e.g., message transmission, typing indicators) is emitted to the server, with corresponding server-to-client event propagation. The system implements dedicated event handlers registered to specific event types, enabling modular processing of discrete communication events. This architectural pattern facilitates extensible application logic through the simple definition of new events and their corresponding handlers, allowing complex interaction scenarios to be managed efficiently through targeted event processing chains.
 
 ## Features
 
