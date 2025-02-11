@@ -10,6 +10,7 @@ import { useMessageScroll } from "./message-scroll-context";
 import { UserRealtimeInfo } from "@/stores/user";
 import { useSession } from "@/context/session";
 import Message from "./message";
+import { Message as MessageType } from "@/types/chat";
 
 export default function MessageArea({ roomID }: { roomID: string }) {
   const session = useSession();
@@ -39,8 +40,6 @@ export default function MessageArea({ roomID }: { roomID: string }) {
   const typingMembers = roomMemberInfo
     ?.filter((member) => member.username !== session.username)
     .filter((member) => member.typing === roomID);
-
-  const messages = [...(data?.pages || []), realtimeMessages];
 
   const { ref: scrollAreaRef, getScrollContainer } = useMessageScroll();
   const oldestMessageRef = useRef<HTMLDivElement>(null);
@@ -123,6 +122,95 @@ export default function MessageArea({ roomID }: { roomID: string }) {
     }
   }, [typingMembers]);
 
+  const renderMessage = (
+    message: MessageType,
+    index: number,
+    messages: MessageType[]
+  ) => {
+    const myMessage = message.sender === session.username;
+    const nextMsg =
+      index + 1 <= messages.length - 1 ? messages[index + 1] : null;
+    const prevMsg = index - 1 >= 0 ? messages[index - 1] : null;
+    const newDay = prevMsg && !isSameDay(prevMsg.sent_at, message.sent_at);
+    const lastOfTheMinute =
+      !nextMsg ||
+      Math.abs(differenceInMinutes(message.sent_at, nextMsg.sent_at)) > 1;
+    const lastFromSameSender = !nextMsg || nextMsg.sender !== message.sender;
+    const endOfGroup = lastFromSameSender || lastOfTheMinute;
+    const shouldDisplaySender = !myMessage && endOfGroup;
+
+    return (
+      <div
+        key={message.id}
+        className={cn(
+          "flMex flex-col overflow-hidden min-w-0 w-full",
+          endOfGroup && "mb-2"
+        )}
+      >
+        {newDay && (
+          <div className="mt-2 pb-1 pt-2 border-t">
+            <p className="text-center text-sm text-muted-foreground">
+              {format(message.sent_at, "dd/MM/yyyy")}
+            </p>
+          </div>
+        )}
+        <div
+          className={cn(
+            "flex flex-col overflow-hidden w-full",
+            myMessage ? "items-end" : "items-start"
+          )}
+        >
+          <div className={cn("flex items-end gap-2 max-w-[70%] min-w-0")}>
+            {!myMessage && (
+              <div className="shrink-0 w-7">
+                {shouldDisplaySender && (
+                  <Avatar
+                    online={realtimeUserInfo[message.sender]?.online}
+                    size="sm"
+                    name={message.sender}
+                  />
+                )}
+              </div>
+            )}
+            <Message
+              message={message}
+              className={cn(!myMessage && "bg-accent")}
+            />
+          </div>
+          {endOfGroup && (
+            <p
+              className={cn(
+                "text-xs text-muted-foreground mt-2",
+                !myMessage && "ml-9"
+              )}
+            >
+              {format(message.sent_at, "dd/MM/yyyy HH:mm")}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMessages = () => {
+    const messages: MessageType[] = [];
+
+    // First, add messages from data.pages, excluding those with ids >= first realtime message
+    const firstRealtimeMessageId = realtimeMessages[0]?.id;
+    for (const page of data?.pages || []) {
+      for (const message of page) {
+        if (firstRealtimeMessageId && message.id >= firstRealtimeMessageId)
+          break;
+        messages.push(message);
+      }
+    }
+
+    // Then add realtime messages
+    messages.push(...realtimeMessages);
+
+    return messages.map((message, i) => renderMessage(message, i, messages));
+  };
+
   return (
     <ScrollArea
       ref={scrollAreaRef}
@@ -146,73 +234,7 @@ export default function MessageArea({ roomID }: { roomID: string }) {
             </p>
           )}
         </div>
-        {messages.flat().map((message, index, messages) => {
-          const myMessage = message.sender === session.username;
-          const nextMsg =
-            index + 1 <= messages.length - 1 ? messages[index + 1] : null;
-          const prevMsg = index - 1 >= 0 ? messages[index - 1] : null;
-          const newDay =
-            prevMsg && !isSameDay(prevMsg.sent_at, message.sent_at);
-          const lastOfTheMinute =
-            !nextMsg ||
-            Math.abs(differenceInMinutes(message.sent_at, nextMsg.sent_at)) > 1;
-          const lastFromSameSender =
-            !nextMsg || nextMsg.sender !== message.sender;
-          const endOfGroup = lastFromSameSender || lastOfTheMinute;
-          const shouldDisplaySender = !myMessage && endOfGroup;
-
-          return (
-            <div
-              key={message.id}
-              className={cn(
-                "flMex flex-col overflow-hidden min-w-0 w-full",
-                endOfGroup && "mb-2"
-              )}
-            >
-              {newDay && (
-                <div className="mt-2 pb-1 pt-2 border-t">
-                  <p className="text-center text-sm text-muted-foreground">
-                    {format(message.sent_at, "dd/MM/yyyy")}
-                  </p>
-                </div>
-              )}
-              <div
-                className={cn(
-                  "flex flex-col overflow-hidden w-full",
-                  myMessage ? "items-end" : "items-start"
-                )}
-              >
-                <div className={cn("flex items-end gap-2 max-w-[70%] min-w-0")}>
-                  {!myMessage && (
-                    <div className="shrink-0 w-7">
-                      {shouldDisplaySender && (
-                        <Avatar
-                          online={realtimeUserInfo[message.sender]?.online}
-                          size="sm"
-                          name={message.sender}
-                        />
-                      )}
-                    </div>
-                  )}
-                  <Message
-                    message={message}
-                    className={cn(!myMessage && "bg-accent")}
-                  />
-                </div>
-                {endOfGroup && (
-                  <p
-                    className={cn(
-                      "text-xs text-muted-foreground mt-2",
-                      !myMessage && "ml-9"
-                    )}
-                  >
-                    {format(message.sent_at, "dd/MM/yyyy HH:mm")}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {renderMessages()}
         {typingMembers && typingMembers.length > 0 && (
           <div className="flex items-center gap-2">
             {typingMembers.slice(0, 4).map((member) => (
