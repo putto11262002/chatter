@@ -1,4 +1,0 @@
-auth:
-  secret: SGVsbG8sIFdvcmxkIQ==
-allowedOrigins:
-  - http://localhost:5173
