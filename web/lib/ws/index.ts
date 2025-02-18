@@ -29,7 +29,7 @@ export class WS {
     if (this.readyState !== ReadyState.Closed) {
       return;
     }
-    this.conn = new WebSocket("ws://localhost:8080/ws");
+    this.conn = new WebSocket(import.meta.env.VITE_WS_URL);
     this.readyState = ReadyState.Connecting;
 
     this.conn.addEventListener("open", () => {

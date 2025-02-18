@@ -165,6 +165,17 @@ func New(ctx context.Context, config *Config, staticFS *StaticFS) *App {
 		app.router.Router.With(staticFS.EtagMiddleware()).Mount("/", http.FileServer(staticFS))
 	}
 
+	app.server = &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", app.config.Hostname, app.config.Port),
+		Handler: app.router.Router,
+		BaseContext: func(listener net.Listener) context.Context {
+			return app.context
+		},
+	}
+	if app.config.Mode == ProdMode {
+		app.server.TLSConfig = &defaultTLSConfig
+	}
+
 	return app
 }
 
@@ -209,19 +220,21 @@ func (app *App) Start() {
 
 	}()
 
-	app.server = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", app.config.Hostname, app.config.Port),
-		Handler: app.router.Router,
-		BaseContext: func(listener net.Listener) context.Context {
-			return app.context
-		},
-	}
-
 	app.AddCleanupFunc(func(ctx context.Context) {
 		app.server.Shutdown(ctx)
 	})
-	app.logger.Info(fmt.Sprintf("app running on: %s:%d", app.config.Hostname, app.config.Port))
-	if err := app.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	app.logger.Info(fmt.Sprintf("app running in %s mode on: %s:%d",
+		app.config.Mode, app.config.Hostname, app.config.Port))
+
+	var err error
+	// TODO: perhaps better validation for TLS config
+	if app.config.TLS.Key != "" && app.config.TLS.Crt != "" {
+		err = app.server.ListenAndServeTLS(app.config.TLS.Crt, app.config.TLS.Key)
+	} else {
+
+		err = app.server.ListenAndServe()
+	}
+	if err != nil && err != http.ErrServerClosed {
 		failed(1, "server error: %v\n", err)
 	}
 

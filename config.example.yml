@@ -3,6 +3,9 @@ auth:
 allowedOrigins:
   - http://localhost:3000
   - http://localhost:3001
+tls:
+  cert: ./cert.pem
+  key: ./key.pem
 sqlite:
   file: chatter.db
   migration: ./migrationss

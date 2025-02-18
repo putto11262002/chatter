@@ -13,11 +13,28 @@ import (
 	"github.com/spf13/viper"
 )
 
+var (
+	DevMode  = "dev"
+	ProdMode = "prod"
+)
+
 type Config struct {
-	// Port is the Port number to listen on. The default is 8080.
-	Port int `validate:"required,port" default:"8080"`
+	// Mode is the mode of the server. The default is dev.jk
+	Mode string `validate:"required,oneof=dev prod"`
+	TLS  struct {
+		// Key is the path to the TLS private key file.
+		// The key must in encoded in PEM format.
+		Key string `validate:"required_if=Mode prod"`
+		// Crt is the path to the TLS certificate file.
+		// The certificate must be in encoded in PEM format.
+		Crt string `validate:"required_if=Mode prod"`
+	}
+	// Port is the Port number to listen on.
+	// If the Mode is dev, the default is 8080.
+	// If the Mode is prod, the default is 443.
+	Port int `validate:"required,port"`
 	// Hostname is the Hostname to listen on. The default is 0.0.0.0.
-	Hostname string `validate:"required" default:"0.0.0.0"`
+	Hostname string `validate:"required"`
 	Auth     struct {
 		// Secret is the Secret key used to sign JWT tokens.
 		// The secret must be a base64 encoded string. The default is a random 32 byte string.
@@ -31,6 +48,7 @@ type Config struct {
 	}
 	// AllowedOrigins is a list of origins that are allowed to connect to the server.
 	// The default is ["*"].
+	// If the Mode is prod, default to [].
 	AllowedOrigins []string
 	valid          bool
 }
